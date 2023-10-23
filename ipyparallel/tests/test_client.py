@@ -221,7 +221,7 @@ class TestClient(ClusterTestCase):
 
         self.client.shutdown(id0, block=True)
 
-        for i in range(150):
+        for _ in range(150):
             # give the engine 15 seconds to die
             if id0 not in self.client.ids:
                 break
@@ -253,15 +253,18 @@ class TestClient(ClusterTestCase):
         """test extracting subset of record keys"""
         found = self.client.db_query({'msg_id': {'$ne' : ''}},keys=['submitted', 'completed'])
         for rec in found:
-            self.assertEqual(set(rec.keys()), set(['msg_id', 'submitted', 'completed']))
+            self.assertEqual(set(rec.keys()), {'msg_id', 'submitted', 'completed'})
 
     def test_db_query_default_keys(self):
         """default db_query excludes buffers"""
         found = self.client.db_query({'msg_id': {'$ne' : ''}})
         for rec in found:
             keys = set(rec.keys())
-            self.assertFalse('buffers' in keys, "'buffers' should not be in: %s" % keys)
-            self.assertFalse('result_buffers' in keys, "'result_buffers' should not be in: %s" % keys)
+            self.assertFalse('buffers' in keys, f"'buffers' should not be in: {keys}")
+            self.assertFalse(
+                'result_buffers' in keys,
+                f"'result_buffers' should not be in: {keys}",
+            )
 
     def test_db_query_msg_id(self):
         """ensure msg_id is always in db queries"""
@@ -302,10 +305,7 @@ class TestClient(ClusterTestCase):
     def test_hub_history(self):
         hist = self.client.hub_history()
         recs = self.client.db_query({ 'msg_id' : {"$ne":''}})
-        recdict = {}
-        for rec in recs:
-            recdict[rec['msg_id']] = rec
-
+        recdict = {rec['msg_id']: rec for rec in recs}
         latest = datetime(1984,1,1).replace(tzinfo=utc)
         for msg_id in hist:
             rec = recdict[msg_id]
@@ -329,19 +329,18 @@ class TestClient(ClusterTestCase):
         # timeout 5s, polling every 100ms
         msg_ids = set(rc.history)
         hub_hist = rc.hub_history()
-        for i in range(50):
-            if msg_ids.difference(hub_hist):
-                time.sleep(0.1)
-                hub_hist = rc.hub_history()
-            else:
+        for _ in range(50):
+            if not msg_ids.difference(hub_hist):
                 break
 
+            time.sleep(0.1)
+            hub_hist = rc.hub_history()
         self.assertEqual(len(msg_ids.difference(hub_hist)), 0)
 
         # step 2. wait for all requests to be done
         # timeout 5s, polling every 100ms
         qs = rc.queue_status()
-        for i in range(50):
+        for _ in range(50):
             if qs['unassigned'] or any(qs[eid]['tasks'] + qs[eid]['queue'] for eid in qs if eid != 'unassigned'):
                 time.sleep(0.1)
                 qs = rc.queue_status()
@@ -376,7 +375,7 @@ class TestClient(ClusterTestCase):
         self._wait_for_idle()
         ars = [ar]
 
-        for i in range(10):
+        for _ in range(10):
             ar = ars[-1]
             ar2 = self.client.resubmit(ar.msg_ids)
 
@@ -438,7 +437,7 @@ class TestClient(ClusterTestCase):
 
     def test_purge_hub_results(self):
         # ensure there are some tasks
-        for i in range(5):
+        for _ in range(5):
             self.client[:].apply_sync(lambda : 1)
         # Wait for the Hub to realise the result is done:
         # This prevents a race condition, where we
@@ -493,7 +492,7 @@ class TestClient(ClusterTestCase):
 
     def test_purge_all_results(self):
         # ensure there are some tasks
-        for i in range(5):
+        for _ in range(5):
             self.client[:].apply_sync(lambda : 1)
         assert self.client.wait(timeout=10)
         self._wait_for_idle()
@@ -505,7 +504,7 @@ class TestClient(ClusterTestCase):
 
     def test_purge_everything(self):
         # ensure there are some tasks
-        for i in range(5):
+        for _ in range(5):
             self.client[:].apply_sync(lambda : 1)
         self.client.wait(timeout=10)
         self._wait_for_idle()
@@ -581,13 +580,12 @@ class TestClient(ClusterTestCase):
     def test_warning_on_hostname_match(self):
         location = socket.gethostname()
         with mock.patch('ipyparallel.client.client.is_local_ip',
-                        lambda x: False):
-            with mock.patch('socket.gethostname', lambda: location[0:-1]), \
-                 pytest.warns(RuntimeWarning): # should trigger warning
+                            lambda x: False):
+            with (mock.patch('socket.gethostname', lambda: location[:-1]), pytest.warns(RuntimeWarning)): # should trigger warning
                 c = self.connect_client()
                 c.close()
             with mock.patch('socket.gethostname', lambda: location), \
-                    pytest.warns(None) as record:  # should not trigger warning
+                        pytest.warns(None) as record:  # should not trigger warning
                 c = self.connect_client()
                 assert len(record) == 0, str(record)
                 c.close()

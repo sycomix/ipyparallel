@@ -76,11 +76,11 @@ class MongoDB(BaseDB):
     
     def get_record(self, msg_id):
         """Get a specific Task Record, by msg_id."""
-        r = self._records.find_one({'msg_id': msg_id})
-        if not r:
+        if r := self._records.find_one({'msg_id': msg_id}):
+            return r
+        else:
             # r will be '' if nothing is found
             raise KeyError(msg_id)
-        return r
     
     def update_record(self, msg_id, rec):
         """Update the data in an existing record."""

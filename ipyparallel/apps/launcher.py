@@ -138,10 +138,7 @@ class BaseLauncher(LoggingConfigurable):
     @property
     def running(self):
         """Am I running."""
-        if self.state == 'running':
-            return True
-        else:
-            return False
+        return self.state == 'running'
 
     def start(self):
         """Start the process."""
@@ -185,7 +182,7 @@ class BaseLauncher(LoggingConfigurable):
         self.log.debug('Process %r stopped: %r', self.args[0], data)
         self.stop_data = data
         self.state = 'after'
-        for i in range(len(self.stop_callbacks)):
+        for _ in range(len(self.stop_callbacks)):
             d = self.stop_callbacks.pop()
             d(data)
         return data
@@ -292,7 +289,6 @@ class LocalProcessLauncher(BaseLauncher):
             self.signal(SIGINT)
         except Exception:
             self.log.debug("interrupt failed")
-            pass
         self.killer = self.loop.add_timeout(self.loop.time() + delay, lambda: self.signal(SIGKILL))
 
     # callbacks, etc:
@@ -443,8 +439,7 @@ class MPILauncher(LocalProcessLauncher):
         # deprecation for old MPIExec names:
         config = kwargs.get('config', {})
         for oldname in ('MPIExecLauncher', 'MPIExecControllerLauncher', 'MPIExecEngineSetLauncher'):
-            deprecated = config.get(oldname)
-            if deprecated:
+            if deprecated := config.get(oldname):
                 newname = oldname.replace('MPIExec', 'MPI')
                 config[newname].update(deprecated)
                 self.log.warn("WARNING: %s name has been deprecated, use %s", oldname, newname)
@@ -565,14 +560,11 @@ class SSHLauncher(LocalProcessLauncher):
 
     @observe('hostname')
     def _hostname_changed(self, change):
-        if self.user:
-            self.location = u'%s@%s' % (self.user, change['new'])
-        else:
-            self.location = change['new']
+        self.location = f"{self.user}@{change['new']}" if self.user else change['new']
 
     @observe('user')
     def _user_changed(self, change):
-        self.location = u'%s@%s' % (change['new'], self.hostname)
+        self.location = f"{change['new']}@{self.hostname}"
 
     def find_args(self):
         return self.ssh_cmd + self.ssh_args + [self.location] + \
@@ -580,17 +572,16 @@ class SSHLauncher(LocalProcessLauncher):
 
     def _send_file(self, local, remote):
         """send a single file"""
-        full_remote = "%s:%s" % (self.location, remote)
-        for i in range(10):
-            if not os.path.exists(local):
-                self.log.debug("waiting for %s" % local)
-                time.sleep(1)
-            else:
+        full_remote = f"{self.location}:{remote}"
+        for _ in range(10):
+            if os.path.exists(local):
                 break
+            self.log.debug(f"waiting for {local}")
+            time.sleep(1)
         remote_dir = os.path.dirname(remote)
         self.log.info("ensuring remote %s:%s/ exists", self.location, remote_dir)
         check_output(self.ssh_cmd + self.ssh_args + \
-            [self.location, 'mkdir', '-p', '--', remote_dir]
+                [self.location, 'mkdir', '-p', '--', remote_dir]
         )
         self.log.info("sending %s to %s", local, full_remote)
         check_output(self.scp_cmd + self.scp_args + [local, full_remote])
@@ -604,12 +595,12 @@ class SSHLauncher(LocalProcessLauncher):
 
     def _fetch_file(self, remote, local):
         """fetch a single file"""
-        full_remote = "%s:%s" % (self.location, remote)
+        full_remote = f"{self.location}:{remote}"
         self.log.info("fetching %s from %s", local, full_remote)
-        for i in range(10):
+        for _ in range(10):
             # wait up to 10s for remote file to exist
             check = check_output(self.ssh_cmd + self.ssh_args + \
-                [self.location, 'test -e', remote, "&& echo 'yes' || echo 'no'"])
+                    [self.location, 'test -e', remote, "&& echo 'yes' || echo 'no'"])
             check = check.decode(DEFAULT_ENCODING, 'replace').strip()
             if check == u'no':
                 time.sleep(1)
@@ -667,12 +658,9 @@ class SSHClusterLauncher(SSHLauncher, ClusterAppMixin):
         """turns /home/you/.ipython/profile_foo into .ipython/profile_foo"""
         home = get_home_dir()
         if not home.endswith('/'):
-            home = home + '/'
+            home = f'{home}/'
 
-        if path.startswith(home):
-            return path[len(home):]
-        else:
-            return path
+        return path[len(home):] if path.startswith(home) else path
 
     def _remote_profile_dir_default(self):
         return self._strip_home(self.profile_dir)
@@ -849,13 +837,12 @@ class SSHProxyEngineSetLauncher(SSHClusterLauncher):
 
 # This is only used on Windows.
 def find_job_cmd():
-    if WINDOWS:
-        try:
-            return find_cmd('job')
-        except (FindCmdError, ImportError):
-            # ImportError will be raised if win32api is not installed
-            return 'job'
-    else:
+    if not WINDOWS:
+        return 'job'
+    try:
+        return find_cmd('job')
+    except (FindCmdError, ImportError):
+        # ImportError will be raised if win32api is not installed
         return 'job'
 
 
@@ -896,7 +883,7 @@ class WindowsHPCLauncher(BaseLauncher):
         if m is not None:
             job_id = m.group()
         else:
-            raise LauncherError("Job id couldn't be determined: %s" % output)
+            raise LauncherError(f"Job id couldn't be determined: {output}")
         self.job_id = job_id
         self.log.info('Job started with id: %r', job_id)
         return job_id
@@ -904,12 +891,8 @@ class WindowsHPCLauncher(BaseLauncher):
     def start(self, n):
         """Start n copies of the process using the Win HPC job scheduler."""
         self.write_job_file(n)
-        args = [
-            'submit',
-            '/jobfile:%s' % self.job_file,
-            '/scheduler:%s' % self.scheduler
-        ]
-        self.log.debug("Starting Win HPC Job: %s" % (self.job_cmd + ' ' + ' '.join(args),))
+        args = ['submit', f'/jobfile:{self.job_file}', f'/scheduler:{self.scheduler}']
+        self.log.debug(f"Starting Win HPC Job: {f'{self.job_cmd} ' + ' '.join(args)}")
 
         output = check_output([self.job_cmd] + args,
             env=os.environ,
@@ -922,12 +905,8 @@ class WindowsHPCLauncher(BaseLauncher):
         return job_id
 
     def stop(self):
-        args = [
-            'cancel',
-            self.job_id,
-            '/scheduler:%s' % self.scheduler
-        ]
-        self.log.info("Stopping Win HPC Job: %s" % (self.job_cmd + ' ' + ' '.join(args),))
+        args = ['cancel', self.job_id, f'/scheduler:{self.scheduler}']
+        self.log.info(f"Stopping Win HPC Job: {f'{self.job_cmd} ' + ' '.join(args)}")
         try:
             output = check_output([self.job_cmd] + args,
                 env=os.environ,
@@ -983,7 +962,7 @@ class WindowsHPCEngineSetLauncher(WindowsHPCLauncher, ClusterAppMixin):
     def write_job_file(self, n):
         job = IPEngineSetJob(parent=self)
 
-        for i in range(n):
+        for _ in range(n):
             t = IPEngineTask(parent=self)
             # The tasks work directory is *not* the actual work directory of
             # the engine. It is used as the base path for the stdout/stderr
@@ -1123,7 +1102,7 @@ class BatchSystemLauncher(BaseLauncher):
         if m is not None:
             job_id = m.group(self.job_id_regexp_group)
         else:
-            raise LauncherError("Job id couldn't be determined: %s" % output)
+            raise LauncherError(f"Job id couldn't be determined: {output}")
         self.job_id = job_id
         self.log.info('Job submitted with job id: %r', job_id)
         return job_id
@@ -1190,8 +1169,9 @@ class BatchSystemLauncher(BaseLauncher):
             out, err = p.communicate()
             output = out + err
         except:
-            self.log.exception("Problem stopping cluster with command: %s" %
-                               (self.delete_command + [self.job_id]))
+            self.log.exception(
+                f"Problem stopping cluster with command: {self.delete_command + [self.job_id]}"
+            )
             output = ""
         output = output.decode(DEFAULT_ENCODING, 'replace')
         self.notify_stop(dict(job_id=self.job_id, output=output)) # Pass the output of the kill cmd
@@ -1552,9 +1532,11 @@ class IPClusterLauncher(LocalProcessLauncher):
     n = Integer(2)
 
     def find_args(self):
-        return self.ipcluster_cmd + [self.ipcluster_subcommand] + \
-            ['--n=%i'%self.n, '--profile=%s' % self.profile] + \
-            self.ipcluster_args
+        return (
+            self.ipcluster_cmd
+            + [self.ipcluster_subcommand]
+            + ['--n=%i' % self.n, f'--profile={self.profile}']
+        ) + self.ipcluster_args
 
     def start(self):
         return super(IPClusterLauncher, self).start()

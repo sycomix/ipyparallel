@@ -26,7 +26,7 @@ def _get_output(cmd):
 
 def test_version():
     for submod in ['cluster', 'engine', 'controller']:
-        out = _get_output([sys.executable, '-m', 'ipyparallel.%s' % submod, '--version'])
+        out = _get_output([sys.executable, '-m', f'ipyparallel.{submod}', '--version'])
         assert out.strip() == ipyparallel.__version__
 
 

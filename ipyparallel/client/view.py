@@ -113,13 +113,15 @@ class View(HasTraits):
 
         self.set_flags(**flags)
 
-        assert not self.__class__ is View, "Don't use base View objects, use subclasses"
+        assert (
+            self.__class__ is not View
+        ), "Don't use base View objects, use subclasses"
 
     def __repr__(self):
         strtargets = str(self.targets)
         if len(strtargets) > 16:
-            strtargets = strtargets[:12]+'...]'
-        return "<%s %s>"%(self.__class__.__name__, strtargets)
+            strtargets = f'{strtargets[:12]}...]'
+        return f"<{self.__class__.__name__} {strtargets}>"
     
     def __len__(self):
         if isinstance(self.targets, list):
@@ -169,10 +171,7 @@ class View(HasTraits):
         False
 
         """
-        # preflight: save flags, and set temporaries
-        saved_flags = {}
-        for f in self._flag_names:
-            saved_flags[f] = getattr(self, f)
+        saved_flags = {f: getattr(self, f) for f in self._flag_names}
         self.set_flags(**kwargs)
         # yield to the with-statement block
         try:
@@ -453,14 +452,14 @@ class DirectView(View):
                 raise NotImplementedError("remote-only imports not yet implemented")
             imp.release_lock()
 
-            key = name+':'+','.join(fromlist or [])
+            key = f'{name}:' + ','.join(fromlist or [])
             if level <= 0 and key not in modules:
                 modules.add(key)
                 if not quiet:
                     if fromlist:
-                        print("importing %s from %s on engine(s)"%(','.join(fromlist), name))
+                        print(f"importing {','.join(fromlist)} from {name} on engine(s)")
                     else:
-                        print("importing %s on engine(s)"%name)
+                        print(f"importing {name} on engine(s)")
                 results.append(self.apply_async(remote_import, name, fromlist, level))
             # restore override
             builtin_mod.__import__ = save_import
@@ -475,9 +474,6 @@ class DirectView(View):
         except ImportError:
             if local:
                 raise
-            else:
-                # ignore import errors if not doing local imports
-                pass
         finally:
             # always restore __import__
             builtin_mod.__import__ = local_import
@@ -551,7 +547,7 @@ class DirectView(View):
         block = self.block if block is None else block
         track = self.track if track is None else track
         targets = self.targets if targets is None else targets
-        
+
         _idents, _targets = self.client._build_targets(targets)
         futures = []
 
@@ -564,10 +560,7 @@ class DirectView(View):
                 self._socket, pf, pargs, pkwargs,
                 track=track, ident=ident)
             futures.append(future)
-        if track:
-            trackers = [_.tracker for _ in futures]
-        else:
-            trackers = []
+        trackers = [_.tracker for _ in futures] if track else []
         if isinstance(targets, int):
             futures = futures[0]
         ar = AsyncResult(self.client, futures, fname=getname(f), targets=_targets, owner=True)
@@ -614,11 +607,11 @@ class DirectView(View):
         """
 
         block = kwargs.pop('block', self.block)
-        for k in kwargs.keys():
+        for k in kwargs:
             if k not in ['block', 'track']:
                 raise TypeError("invalid keyword arg, %r"%k)
 
-        assert len(sequences) > 0, "must have some sequences to map onto!"
+        assert sequences, "must have some sequences to map onto!"
         pf = ParallelFunction(self, f, block=block, **kwargs)
         return pf.map(*sequences)
 
@@ -706,7 +699,7 @@ class DirectView(View):
         targets = targets if targets is not None else self.targets
         # applier = self.apply_sync if block else self.apply_async
         if not isinstance(ns, dict):
-            raise TypeError("Must be a dict, not %s"%type(ns))
+            raise TypeError(f"Must be a dict, not {type(ns)}")
         return self._really_apply(util._push, kwargs=ns, block=block, track=track, targets=targets)
 
     def get(self, key_s):
@@ -779,9 +772,9 @@ class DirectView(View):
 
         # construct integer ID list:
         targets = self.client._build_targets(targets)[1]
-        
+
         futures = []
-        for index, engineid in enumerate(targets):
+        for engineid in targets:
             ar = self.pull(key, block=False, targets=engineid)
             ar.owner = False
             futures.extend(ar._children)
@@ -955,7 +948,7 @@ class LoadBalancedView(View):
                     raise TypeError("Invalid type for timeout: %r"%type(t))
             if t is not None:
                 if t < 0:
-                    raise ValueError("Invalid timeout: %s"%t)
+                    raise ValueError(f"Invalid timeout: {t}")
             self.timeout = t
 
     @sync_results
@@ -1104,11 +1097,10 @@ class LoadBalancedView(View):
         ordered = kwargs.get('ordered', True)
 
         keyset = set(kwargs.keys())
-        extra_keys = keyset.difference_update(set(['block', 'chunksize']))
-        if extra_keys:
-            raise TypeError("Invalid kwargs: %s"%list(extra_keys))
+        if extra_keys := keyset.difference_update({'block', 'chunksize'}):
+            raise TypeError(f"Invalid kwargs: {list(extra_keys)}")
 
-        assert len(sequences) > 0, "must have some sequences to map onto!"
+        assert sequences, "must have some sequences to map onto!"
 
         pf = ParallelFunction(self, f, block=block, chunksize=chunksize, ordered=ordered)
         return pf.map(*sequences)
@@ -1154,8 +1146,7 @@ class ViewExecutor(Executor):
         if 'timeout' in kwargs:
             warnings.warn("timeout unsupported in ViewExecutor.map")
             kwargs.pop('timeout')
-        for r in self.view.map_async(func, *iterables, **kwargs):
-            yield r
+        yield from self.view.map_async(func, *iterables, **kwargs)
     
     def shutdown(self, wait=True):
         """ViewExecutor does *not* shutdown engines

@@ -33,6 +33,7 @@ DictDB supports a subset of mongodb operators::
     $lt,$gt,$lte,$gte,$ne,$in,$nin,$all,$mod,$exists
 """
 
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 
@@ -53,17 +54,17 @@ from traitlets import Dict, Unicode, Integer, Float
 from ..util import ensure_timezone
 
 filters = {
- '$lt' : lambda a,b: a < b,
- '$gt' : lambda a,b: b > a,
- '$eq' : lambda a,b: a == b,
- '$ne' : lambda a,b: a != b,
- '$lte': lambda a,b: a <= b,
- '$gte': lambda a,b: a >= b,
- '$in' : lambda a,b: a in b,
- '$nin': lambda a,b: a not in b,
- '$all': lambda a,b: all([ a in bb for bb in b ]),
- '$mod': lambda a,b: a%b[0] == b[1],
- '$exists' : lambda a,b: (b and a is not None) or (a is None and not b)
+    '$lt': lambda a, b: a < b,
+    '$gt': lambda a, b: b > a,
+    '$eq': lambda a, b: a == b,
+    '$ne': lambda a, b: a != b,
+    '$lte': lambda a, b: a <= b,
+    '$gte': lambda a, b: a >= b,
+    '$in': lambda a, b: a in b,
+    '$nin': lambda a, b: a not in b,
+    '$all': lambda a, b: all(a in bb for bb in b),
+    '$mod': lambda a, b: a % b[0] == b[1],
+    '$exists': lambda a, b: (b and a is not None) or (a is None and not b),
 }
 
 def _add_tz(obj):
@@ -83,10 +84,7 @@ class CompositeFilter(object):
             self.values.append(_add_tz(value))
 
     def __call__(self, value):
-        for test,check in zip(self.tests, self.values):
-            if not test(value, check):
-                return False
-        return True
+        return all(test(value, check) for test, check in zip(self.tests, self.values))
 
 class BaseDB(LoggingConfigurable):
     """Empty Parent class so traitlets work on DB."""
@@ -138,30 +136,25 @@ class DictDB(BaseDB):
 
     def _match_one(self, rec, tests):
         """Check if a specific record matches tests."""
-        for key,test in iteritems(tests):
-            if not test(rec.get(key, None)):
-                return False
-        return True
+        return all(test(rec.get(key, None)) for key, test in iteritems(tests))
 
     def _match(self, check):
         """Find all the matches for a check dict."""
-        matches = []
-        tests = {}
-        for k,v in iteritems(check):
-            if isinstance(v, dict):
-                tests[k] = CompositeFilter(v)
-            else:
-                tests[k] = lambda o: _add_tz(o) == _add_tz(v)
-
-        for rec in itervalues(self._records):
-            if self._match_one(rec, tests):
-                matches.append(deepcopy(rec))
-        return matches
+        tests = {
+            k: CompositeFilter(v)
+            if isinstance(v, dict)
+            else (lambda o: _add_tz(o) == _add_tz(v))
+            for k, v in iteritems(check)
+        }
+        return [
+            deepcopy(rec)
+            for rec in itervalues(self._records)
+            if self._match_one(rec, tests)
+        ]
 
     def _extract_subdict(self, rec, keys):
         """extract subdict of keys"""
-        d = {}
-        d['msg_id'] = rec['msg_id']
+        d = {'msg_id': rec['msg_id']}
         for key in keys:
             d[key] = rec[key]
         return deepcopy(d)
@@ -235,7 +228,7 @@ class DictDB(BaseDB):
         """Get a specific Task Record, by msg_id."""
         if msg_id in self._culled_ids:
             raise KeyError("Record %r has been culled for size" % msg_id)
-        if not msg_id in self._records:
+        if msg_id not in self._records:
             raise KeyError("No such msg_id %r"%(msg_id))
         return deepcopy(self._records[msg_id])
 
@@ -296,7 +289,6 @@ class NoData(KeyError):
     """Special KeyError to raise when requesting data from NoDB"""
     def __str__(self):
         return "NoDB backend doesn't store any data. "
-        "Start the Controller with a DB backend to enable resubmission / result persistence."
 
 
 class NoDB(BaseDB):

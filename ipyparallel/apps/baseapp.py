@@ -124,7 +124,7 @@ class BaseParallelApplication(BaseIPythonApplication):
     @observe('cluster_id')
     def _cluster_id_changed(self, change):
         if change['new']:
-            self.name += '{}-{}'.format(self.__class__.name, change['new'])
+            self.name += f"{self.__class__.name}-{change['new']}"
         else:
             self.name = self.__class__.name
 
@@ -150,7 +150,7 @@ class BaseParallelApplication(BaseIPythonApplication):
         wd = self.work_dir
         if unicode_type(wd) != py3compat.getcwd():
             os.chdir(wd)
-            self.log.info("Changing to working dir: %s" % wd)
+            self.log.info(f"Changing to working dir: {wd}")
         # This is the working dir by now.
         sys.path.insert(0, '')
 
@@ -168,7 +168,7 @@ class BaseParallelApplication(BaseIPythonApplication):
                         pass
         if self.log_to_file:
             # Start logging to the new log file
-            log_filename = self.name + u'-' + str(os.getpid()) + u'.log'
+            log_filename = f'{self.name}-{os.getpid()}.log'
             logfile = os.path.join(log_dir, log_filename)
             open_log_file = open(logfile, 'w')
         else:
@@ -195,7 +195,7 @@ class BaseParallelApplication(BaseIPythonApplication):
         This must be called after pre_construct, which sets `self.pid_dir`.
         This raises :exc:`PIDFileError` if the pid file exists already.
         """
-        pid_file = os.path.join(self.profile_dir.pid_dir, self.name + u'.pid')
+        pid_file = os.path.join(self.profile_dir.pid_dir, f'{self.name}.pid')
         if os.path.isfile(pid_file):
             pid = self.get_pid_from_file()
             if not overwrite:
@@ -204,7 +204,7 @@ class BaseParallelApplication(BaseIPythonApplication):
                     'server is already running with [pid=%s].' % (pid_file, pid)
                 )
         with open(pid_file, 'w') as f:
-            self.log.info("Creating pid file: %s" % pid_file)
+            self.log.info(f"Creating pid file: {pid_file}")
             f.write(repr(os.getpid())+'\n')
 
     def remove_pid_file(self):
@@ -214,30 +214,29 @@ class BaseParallelApplication(BaseIPythonApplication):
         :func:`reactor.addSystemEventTrigger`. This needs to return
         ``None``.
         """
-        pid_file = os.path.join(self.profile_dir.pid_dir, self.name + u'.pid')
+        pid_file = os.path.join(self.profile_dir.pid_dir, f'{self.name}.pid')
         if os.path.isfile(pid_file):
             try:
-                self.log.info("Removing pid file: %s" % pid_file)
+                self.log.info(f"Removing pid file: {pid_file}")
                 os.remove(pid_file)
             except:
-                self.log.warn("Error removing the pid file: %s" % pid_file)
+                self.log.warn(f"Error removing the pid file: {pid_file}")
 
     def get_pid_from_file(self):
         """Get the pid from the pid file.
 
         If the  pid file doesn't exist a :exc:`PIDFileError` is raised.
         """
-        pid_file = os.path.join(self.profile_dir.pid_dir, self.name + u'.pid')
-        if os.path.isfile(pid_file):
-            with open(pid_file, 'r') as f:
-                s = f.read().strip()
-                try:
-                    pid = int(s)
-                except:
-                    raise PIDFileError("invalid pid file: %s (contents: %r)"%(pid_file, s))
-                return pid
-        else:
-            raise PIDFileError('pid file not found: %s' % pid_file)
+        pid_file = os.path.join(self.profile_dir.pid_dir, f'{self.name}.pid')
+        if not os.path.isfile(pid_file):
+            raise PIDFileError(f'pid file not found: {pid_file}')
+        with open(pid_file, 'r') as f:
+            s = f.read().strip()
+            try:
+                pid = int(s)
+            except:
+                raise PIDFileError("invalid pid file: %s (contents: %r)"%(pid_file, s))
+            return pid
     
     def check_pid(self, pid):
         try:

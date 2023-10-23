@@ -45,11 +45,10 @@ class ClusterActionHandler(ClusterHandler):
     def post(self, profile, action):
         cm = self.cluster_manager
         if action == 'start':
-            n = self.get_argument('n', default=None)
-            if not n:
-                data = cm.start_cluster(profile)
-            else:
+            if n := self.get_argument('n', default=None):
                 data = cm.start_cluster(profile, int(n))
+            else:
+                data = cm.start_cluster(profile)
         if action == 'stop':
             data = cm.stop_cluster(profile)
         self.finish(json.dumps(data))
@@ -65,8 +64,11 @@ _profile_regex = r"(?P<profile>[^\/]+)" # there is almost no text that is invali
 
 default_handlers = [
     (r"/clusters", MainClusterHandler),
-    (r"/clusters/%s/%s" % (_profile_regex, _cluster_action_regex), ClusterActionHandler),
-    (r"/clusters/%s" % _profile_regex, ClusterProfileHandler),
+    (
+        f"/clusters/{_profile_regex}/{_cluster_action_regex}",
+        ClusterActionHandler,
+    ),
+    (f"/clusters/{_profile_regex}", ClusterProfileHandler),
 ]
 
 

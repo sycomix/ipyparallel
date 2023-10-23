@@ -35,8 +35,7 @@ def fetchAndParse(url, data=None):
     if 'text/html' in r.headers.get('content-type'):
         doc = bs4.BeautifulSoup(r.text, "html.parser")
         for node in doc.findAll('a'):
-            href = node.get('href', None)
-            if href:
+            if href := node.get('href', None):
                 links.append(urljoin(url, href))
     return links
 
@@ -64,7 +63,7 @@ class DistributedSpider(object):
                 self.linksWorking[url] = self.view.apply(fetchAndParse, url)
 
     def onVisitDone(self, links, url):
-        print(url + ':')
+        print(f'{url}:')
         self.linksDone[url] = None
         del self.linksWorking[url]
         for link in links:
@@ -88,15 +87,12 @@ class DistributedSpider(object):
             except Exception as e:
                 self.linksDone[url] = None
                 del self.linksWorking[url]
-                print('%s: %s' % (url, e))
+                print(f'{url}: {e}')
             else:
                 self.onVisitDone(links, url)
 
 def main():
-    if len(sys.argv) > 1:
-        site = sys.argv[1]
-    else:
-        site = raw_input('Enter site to crawl: ')
+    site = sys.argv[1] if len(sys.argv) > 1 else raw_input('Enter site to crawl: ')
     distributedSpider = DistributedSpider(site)
     distributedSpider.run()
 

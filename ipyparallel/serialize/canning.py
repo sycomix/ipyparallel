@@ -176,17 +176,14 @@ class CannedFunction(CannedObject):
     def __init__(self, f):
         self._check_type(f)
         self.code = f.__code__
-        if f.__defaults__:
-            self.defaults = [ can(fd) for fd in f.__defaults__ ]
-        else:
-            self.defaults = None
-        
-        closure = py3compat.get_closure(f)
-        if closure:
+        self.defaults = (
+            [can(fd) for fd in f.__defaults__] if f.__defaults__ else None
+        )
+        if closure := py3compat.get_closure(f):
             self.closure = tuple( can(cell) for cell in closure )
         else:
             self.closure = None
-        
+
         self.module = f.__module__ or '__main__'
         self.__name__ = f.__name__
         self.buffers = []
@@ -210,8 +207,7 @@ class CannedFunction(CannedObject):
             closure = tuple(uncan(cell, g) for cell in self.closure)
         else:
             closure = None
-        newFunc = FunctionType(self.code, g, self.__name__, defaults, closure)
-        return newFunc
+        return FunctionType(self.code, g, self.__name__, defaults, closure)
 
 
 class CannedPartial(CannedObject):
@@ -276,11 +272,7 @@ class CannedClass(CannedObject):
         for k,v in cls.__dict__.items():
             if k not in ('__weakref__', '__dict__'):
                 self._canned_dict[k] = can(v)
-        if self.old_style:
-            mro = []
-        else:
-            mro = cls.mro()
-        
+        mro = [] if self.old_style else cls.mro()
         self.parents = [ can(c) for c in mro[1:] ]
         self.buffers = []
 
@@ -373,10 +365,7 @@ def istype(obj, check):
     This won't catch subclasses.
     """
     if isinstance(check, tuple):
-        for cls in check:
-            if type(obj) is cls:
-                return True
-        return False
+        return any(type(obj) is cls for cls in check)
     else:
         return type(obj) is check
 
@@ -408,23 +397,16 @@ def can_class(obj):
 
 def can_dict(obj):
     """can the *values* of a dict"""
-    if istype(obj, dict):
-        newobj = {}
-        for k, v in iteritems(obj):
-            newobj[k] = can(v)
-        return newobj
-    else:
-        return obj
+    return {k: can(v) for k, v in iteritems(obj)} if istype(obj, dict) else obj
 
 sequence_types = (list, tuple, set)
 
 def can_sequence(obj):
     """can the elements of a sequence"""
-    if istype(obj, sequence_types):
-        t = type(obj)
-        return t([can(i) for i in obj])
-    else:
+    if not istype(obj, sequence_types):
         return obj
+    t = type(obj)
+    return t([can(i) for i in obj])
 
 def uncan(obj, g=None):
     """invert canning"""
@@ -447,10 +429,7 @@ def uncan(obj, g=None):
 
 def uncan_dict(obj, g=None):
     if istype(obj, dict):
-        newobj = {}
-        for k, v in iteritems(obj):
-            newobj[k] = uncan(v,g)
-        return newobj
+        return {k: uncan(v,g) for k, v in iteritems(obj)}
     else:
         return obj
 

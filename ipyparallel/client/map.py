@@ -41,25 +41,25 @@ class Map(object):
         n = len(seq) if n is None else n
         # Test for error conditions here
         if p<0 or p>=q:
-          raise ValueError("must have 0 <= p <= q, but have p=%s,q=%s" % (p, q))
-        
+            raise ValueError(f"must have 0 <= p <= q, but have p={p},q={q}")
+
         remainder = n % q
         basesize = n // q
-        
+
         if p < remainder:
             low = p * (basesize + 1)
             high = low + basesize + 1
         else:
             low = p * basesize + remainder
             high = low + basesize
-        
+
         try:
             result = seq[low:high]
         except TypeError:
             # some objects (iterators) can't be sliced,
             # use islice:
             result = list(islice(seq, low, high))
-            
+
         return result
            
     def joinPartitions(self, listOfPartitions):
@@ -98,7 +98,7 @@ class RoundRobinMap(Map):
     def flatten_array(self, listOfPartitions):
         test = listOfPartitions[0]
         shape = list(test.shape)
-        shape[0] = sum([ p.shape[0] for p in listOfPartitions])
+        shape[0] = sum(p.shape[0] for p in listOfPartitions)
         A = numpy.ndarray(shape)
         N = shape[0]
         q = len(listOfPartitions)
@@ -114,11 +114,7 @@ class RoundRobinMap(Map):
 
 def mappable(obj):
     """return whether an object is mappable or not."""
-    if isinstance(obj, (tuple,list)):
-        return True
-    if is_array(obj):
-        return True
-    return False
+    return True if isinstance(obj, (tuple,list)) else bool(is_array(obj))
 
 dists = {'b':Map,'r':RoundRobinMap}
 

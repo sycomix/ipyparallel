@@ -87,8 +87,7 @@ class ClusterManager(LoggingConfigurable):
             return []
         # sorted list, but ensure that 'default' always comes first
         default_first = lambda name: name if name != 'default' else ''
-        result = [self.profile_info(p) for p in sorted(self.profiles, key=default_first)]
-        return result
+        return [self.profile_info(p) for p in sorted(self.profiles, key=default_first)]
 
     def check_profile(self, profile):
         if profile not in self.profiles:
@@ -96,11 +95,12 @@ class ClusterManager(LoggingConfigurable):
 
     def profile_info(self, profile):
         self.check_profile(profile)
-        result = {}
         data = self.profiles.get(profile)
-        result['profile'] = profile
-        result['profile_dir'] = data['profile_dir']
-        result['status'] = data['status']
+        result = {
+            'profile': profile,
+            'profile_dir': data['profile_dir'],
+            'status': data['status'],
+        }
         if 'n' in data:
             result['n'] = data['n']
         return result
@@ -158,14 +158,11 @@ class ClusterManager(LoggingConfigurable):
             cl.stop()
         if esl.running:
             esl.stop()
-        # Return a temp info dict, the real one is updated in the on_stop
-        # logic above.
-        result = {
+        return {
             'profile': data['profile'],
             'profile_dir': data['profile_dir'],
-            'status': 'stopped'
+            'status': 'stopped',
         }
-        return result
 
     def stop_all_clusters(self):
         for p in self.profiles.keys():

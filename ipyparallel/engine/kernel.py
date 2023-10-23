@@ -21,9 +21,9 @@ class IPythonParallelKernel(IPythonKernel):
     
     def _topic(self, topic):
         """prefixed topic for IOPub messages"""
-        base = "engine.%s" % self.engine_id
+        base = f"engine.{self.engine_id}"
 
-        return cast_bytes("%s.%s" % (base, topic))
+        return cast_bytes(f"{base}.{topic}")
 
     def __init__(self, **kwargs):
         super(IPythonParallelKernel, self).__init__(**kwargs)
@@ -110,15 +110,15 @@ class IPythonParallelKernel(IPythonKernel):
 
             fname = getattr(f, '__name__', 'f')
 
-            fname = prefix+"f"
-            argname = prefix+"args"
-            kwargname = prefix+"kwargs"
-            resultname = prefix+"result"
+            fname = f"{prefix}f"
+            argname = f"{prefix}args"
+            kwargname = f"{prefix}kwargs"
+            resultname = f"{prefix}result"
 
             ns = { fname : f, argname : args, kwargname : kwargs , resultname : None }
             # print ns
             working.update(ns)
-            code = "%s = %s(*%s,**%s)" % (resultname, fname, argname, kwargname)
+            code = f"{resultname} = {fname}(*{argname},**{kwargname})"
             try:
                 exec(code, shell.user_global_ns, shell.user_ns)
                 result = working.get(resultname)

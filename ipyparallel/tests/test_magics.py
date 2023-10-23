@@ -280,7 +280,7 @@ class TestParallelMagics(ClusterTestCase):
         v.push(data, block=True)
 
         for name in ('a', 'b'):
-            ip.magic('px ' + name)
+            ip.magic(f'px {name}')
             with capture_output(display=False) as io:
                 ip.magic('pxresult')
             self.assertIn(str(data[name]), io.stdout)

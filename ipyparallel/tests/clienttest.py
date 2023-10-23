@@ -80,8 +80,9 @@ def skip_without(*names):
             try:
                 __import__(name)
             except ImportError:
-                pytest.skip("Test requires %s" % name)
+                pytest.skip(f"Test requires {name}")
         return f(*args, **kwargs)
+
     return skip_without_names
 
 #-------------------------------------------------------------------------------
@@ -111,8 +112,8 @@ class ClusterTestCase(BaseZMQTestCase):
         tic = time.time()
         while time.time()-tic < timeout and len(self.client.ids) < n:
             time.sleep(0.1)
-        
-        assert not len(self.client.ids) < n, "waiting for engines timed out"
+
+        assert len(self.client.ids) >= n, "waiting for engines timed out"
     
     def client_wait(self, client, jobs=None, timeout=-1):
         """my wait wrapper, sets a default finite timeout to avoid hangs"""

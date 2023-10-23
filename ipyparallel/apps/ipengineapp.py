@@ -111,11 +111,8 @@ class IPEngineApp(BaseParallelApplication):
 
     @observe('cluster_id')
     def _cluster_id_changed(self, change):
-        if change['new']:
-            base = 'ipcontroller-{}'.format(change['new'])
-        else:
-            base = 'ipcontroller'
-        self.url_file_name = "%s-engine.json" % base
+        base = f"ipcontroller-{change['new']}" if change['new'] else 'ipcontroller'
+        self.url_file_name = f"{base}-engine.json"
 
     log_url = Unicode('', config=True,
         help="""The URL for the iploggerapp instance, for forwarding
@@ -152,7 +149,7 @@ class IPEngineApp(BaseParallelApplication):
         
         self.log.info("Loading url_file %r", self.url_file)
         config = self.config
-        
+
         with open(self.url_file) as f:
             num_tries = 0
             max_tries = 5
@@ -165,30 +162,30 @@ class IPEngineApp(BaseParallelApplication):
                         raise
                     num_tries += 1
                     time.sleep(0.5)
-        
+
         # allow hand-override of location for disambiguation
         # and ssh-server
         if 'EngineFactory.location' not in config:
             config.EngineFactory.location = d['location']
         if 'EngineFactory.sshserver' not in config:
             config.EngineFactory.sshserver = d.get('ssh')
-        
+
         location = config.EngineFactory.location
-        
+
         proto, ip = d['interface'].split('://')
         ip = disambiguate_ip_address(ip, location)
-        d['interface'] = '%s://%s' % (proto, ip)
-        
+        d['interface'] = f'{proto}://{ip}'
+
         # DO NOT allow override of basic URLs, serialization, or key
         # JSON file takes top priority there
         config.Session.key = cast_bytes(d['key'])
         config.Session.signature_scheme = d['signature_scheme']
-        
+
         config.EngineFactory.url = d['interface'] + ':%i' % d['registration']
-        
+
         config.Session.packer = d['pack']
         config.Session.unpacker = d['unpack']
-        
+
         self.log.debug("Config changed:")
         self.log.debug("%r", config)
         self.connection_info = d
@@ -245,11 +242,11 @@ class IPEngineApp(BaseParallelApplication):
         config = self.config
         # print config
         self.find_url_file()
-        
+
         # was the url manually specified?
         keys = set(self.config.EngineFactory.keys())
         keys = keys.union(set(self.config.RegistrationFactory.keys()))
-        
+
         if self.wait_for_url_file and not os.path.exists(self.url_file):
             self.log.warn("url_file %r not found", self.url_file)
             self.log.warn("Waiting up to %.1f seconds for it to arrive.", self.wait_for_url_file)
@@ -257,28 +254,32 @@ class IPEngineApp(BaseParallelApplication):
             while not os.path.exists(self.url_file) and (time.time()-tic < self.wait_for_url_file):
                 # wait for url_file to exist, or until time limit
                 time.sleep(0.1)
-            
+
         if os.path.exists(self.url_file):
             self.load_connector_file()
         else:
             self.log.fatal("Fatal: url file never arrived: %s", self.url_file)
             self.exit(1)
-        
-        exec_lines = []
-        for app in ('IPKernelApp', 'InteractiveShellApp'):
-            if '%s.exec_lines' % app in config:
-                exec_lines = config[app].exec_lines
-                break
-        
-        exec_files = []
-        for app in ('IPKernelApp', 'InteractiveShellApp'):
-            if '%s.exec_files' % app in config:
-                exec_files = config[app].exec_files
-                break
-        
+
+        exec_lines = next(
+            (
+                config[app].exec_lines
+                for app in ('IPKernelApp', 'InteractiveShellApp')
+                if f'{app}.exec_lines' in config
+            ),
+            [],
+        )
+        exec_files = next(
+            (
+                config[app].exec_files
+                for app in ('IPKernelApp', 'InteractiveShellApp')
+                if f'{app}.exec_files' in config
+            ),
+            [],
+        )
         config.IPKernelApp.exec_lines = exec_lines
         config.IPKernelApp.exec_files = exec_files
-        
+
         if self.startup_script:
             exec_files.append(self.startup_script)
         if self.startup_command:

@@ -386,7 +386,7 @@ class TestView(ClusterTestCase):
     def test_abort_all(self):
         """view.abort() aborts all outstanding tasks"""
         view = self.client[-1]
-        ars = [ view.apply_async(time.sleep, 0.25) for i in range(10) ]
+        ars = [view.apply_async(time.sleep, 0.25) for _ in range(10)]
         view.abort()
         view.wait(timeout=5)
         for ar in ars[5:]:
@@ -418,10 +418,7 @@ class TestView(ClusterTestCase):
         """test executing unicode strings"""
         v = self.client[-1]
         v.block=True
-        if sys.version_info[0] >= 3:
-            code="a='é'"
-        else:
-            code=u"a=u'é'"
+        code = "a='é'" if sys.version_info[0] >= 3 else u"a=u'é'"
         v.execute(code)
         self.assertEqual(v['a'], u'é')
         
@@ -434,13 +431,13 @@ class TestView(ClusterTestCase):
     def test_unicode_apply_arg(self):
         """test passing unicode arguments to apply"""
         v = self.client[-1]
-        
+
         @interactive
         def check_unicode(a, check):
             assert not isinstance(a, bytes), "%r is bytes, not unicode"%a
             assert isinstance(check, bytes), "%r is not bytes"%check
-            assert a.encode('utf8') == check, "%s != %s"%(a,check)
-        
+            assert a.encode('utf8') == check, f"{a} != {check}"
+
         for s in [ u'é', u'ßø®∫',u'asdf' ]:
             try:
                 v.apply_sync(check_unicode, s, s.encode('utf8'))
@@ -571,7 +568,7 @@ class TestView(ClusterTestCase):
                 if split == ['a', 'int', '5']:
                     found = True
                     break
-            self.assertTrue(found, "whos output wrong: %s" % stdout)
+            self.assertTrue(found, f"whos output wrong: {stdout}")
     
     def test_execute_displaypub(self):
         """execute tracks display_pub output"""
@@ -637,10 +634,7 @@ class TestView(ClusterTestCase):
     def test_compositeerror_truncate(self):
         """Truncate CompositeErrors with many exceptions"""
         view = self.client[:]
-        requests = []
-        for i in range(10):
-            requests.append(view.execute("1/0"))
-        
+        requests = [view.execute("1/0") for _ in range(10)]
         ar = self.client.get_result(requests)
         try:
             ar.get()
@@ -648,14 +642,14 @@ class TestView(ClusterTestCase):
             e = _e
         else:
             self.fail("Should have raised CompositeError")
-        
+
         lines = e.render_traceback()
         with capture_output() as io:
             e.print_traceback()
-        
+
         self.assertTrue("more exceptions" in lines[-1])
         count = e.tb_limit
-        
+
         self.assertEqual(io.stdout.count('ZeroDivisionError'), 2 * count, io.stdout)
         self.assertEqual(io.stdout.count('by zero'), count, io.stdout)
         self.assertEqual(io.stdout.count(':execute'), count, io.stdout)

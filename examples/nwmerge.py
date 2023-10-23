@@ -47,10 +47,7 @@ def mergesort(list_of_lists, key=None):
     for i, itr in enumerate(iter(pl) for pl in list_of_lists):
         try:
             item = next(itr)
-            if key:
-                toadd = (key(item), i, item, itr)
-            else:
-                toadd = (item, i, itr)
+            toadd = (key(item), i, item, itr) if key else (item, i, itr)
             heap.append(toadd)
         except StopIteration:
             pass
@@ -79,11 +76,10 @@ def mergesort(list_of_lists, key=None):
 def remote_iterator(view,name):
     """Return an iterator on an object living on a remote engine.
     """
-    view.execute('it%s=iter(%s)'%(name,name), block=True)
+    view.execute(f'it{name}=iter({name})', block=True)
     while True:
         try:
-            result = view.apply_sync(next, ipp.Reference('it'+name))
-        # This causes the StopIteration exception to be raised.
+            result = view.apply_sync(next, ipp.Reference(f'it{name}'))
         except RemoteError as e:
             if e.ename == 'StopIteration':
                 raise StopIteration

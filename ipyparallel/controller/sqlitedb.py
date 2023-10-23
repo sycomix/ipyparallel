@@ -61,11 +61,10 @@ def _adapt_dict(d):
 def _convert_dict(ds):
     if ds is None:
         return ds
-    else:
-        if isinstance(ds, bytes):
-            # If I understand the sqlite doc correctly, this will always be utf8
-            ds = ds.decode('utf8')
-        return extract_dates(json.loads(ds))
+    if isinstance(ds, bytes):
+        # If I understand the sqlite doc correctly, this will always be utf8
+        ds = ds.decode('utf8')
+    return extract_dates(json.loads(ds))
 
 def _adapt_bufs(bufs):
     # this is *horrible*
@@ -78,10 +77,7 @@ def _adapt_bufs(bufs):
         return None
 
 def _convert_bufs(bs):
-    if bs is None:
-        return []
-    else:
-        return pickle.loads(bytes(bs))
+    return [] if bs is None else pickle.loads(bytes(bs))
 
 def _adapt_timestamp(dt):
     """Adapt datetime to text"""
@@ -174,10 +170,7 @@ class SQLiteDB(BaseDB):
             from IPython.core.application import BaseIPythonApplication
             if BaseIPythonApplication.initialized():
                 app = BaseIPythonApplication.instance()
-                if app.profile_dir is not None:
-                    self.location = app.profile_dir.location
-                else:
-                    self.location = u'.'
+                self.location = u'.' if app.profile_dir is None else app.profile_dir.location
             else:
                 self.location = u'.'
         self._init_db()
@@ -195,18 +188,15 @@ class SQLiteDB(BaseDB):
 
     def _defaults(self, keys=None):
         """create an empty record"""
-        d = {}
         keys = self._keys if keys is None else keys
-        for key in keys:
-            d[key] = None
-        return d
+        return {key: None for key in keys}
 
     def _check_table(self):
         """Ensure that an incorrect table doesn't exist
 
         If a bad (old) table does exist, return False
         """
-        cursor = self._db.execute("PRAGMA table_info('%s')"%self.table)
+        cursor = self._db.execute(f"PRAGMA table_info('{self.table}')")
         lines = cursor.fetchall()
         if not lines:
             # table does not exist
@@ -222,9 +212,7 @@ class SQLiteDB(BaseDB):
             return False
         for key in self._keys:
             if types[key] != self._types[key]:
-                self.log.warn(
-                    'type mismatch: %s: %s != %s'%(key,types[key],self._types[key])
-                )
+                self.log.warn(f'type mismatch: {key}: {types[key]} != {self._types[key]}')
                 return False
         return True
 
@@ -249,8 +237,7 @@ class SQLiteDB(BaseDB):
             i+=1
             self.table = first_table+'_%i'%i
             self.log.warn(
-                "Table %s exists and doesn't match db format, trying %s"%
-                (previous_table, self.table)
+                f"Table {previous_table} exists and doesn't match db format, trying {self.table}"
             )
             previous_table = self.table
 
@@ -301,9 +288,9 @@ class SQLiteDB(BaseDB):
 
         skeys = set(check.keys())
         skeys.difference_update(set(self._keys))
-        skeys.difference_update(set(['buffers', 'result_buffers']))
+        skeys.difference_update({'buffers', 'result_buffers'})
         if skeys:
-            raise KeyError("Illegal testing key(s): %s"%skeys)
+            raise KeyError(f"Illegal testing key(s): {skeys}")
 
         for name,sub_check in iteritems(check):
             if isinstance(sub_check, dict):
@@ -316,25 +303,25 @@ class SQLiteDB(BaseDB):
                         op, join = op
 
                     if value is None and op in null_operators:
-                        expr = "%s %s" % (name, null_operators[op])
+                        expr = f"{name} {null_operators[op]}"
                     else:
-                        expr = "%s %s ?"%(name, op)
+                        expr = f"{name} {op} ?"
                         if isinstance(value, (tuple,list)):
-                            if op in null_operators and any([v is None for v in value]):
+                            if op in null_operators and any(
+                                v is None for v in value
+                            ):
                                 # equality tests don't work with NULL
                                 raise ValueError("Cannot use %r test with NULL values on SQLite backend"%test)
-                            expr = '( %s )'%( join.join([expr]*len(value)) )
+                            expr = f'( {join.join([expr] * len(value))} )'
                             args.extend(value)
                         else:
                             args.append(value)
                     expressions.append(expr)
+            elif sub_check is None:
+                expressions.append(f"{name} IS NULL")
             else:
-                # it's an equality check
-                if sub_check is None:
-                    expressions.append("%s IS NULL" % name)
-                else:
-                    expressions.append("%s = ?"%name)
-                    args.append(sub_check)
+                expressions.append(f"{name} = ?")
+                args.append(sub_check)
 
         expr = " AND ".join(expressions)
         return expr, args
@@ -345,13 +332,15 @@ class SQLiteDB(BaseDB):
         d.update(rec)
         d['msg_id'] = msg_id
         line = self._dict_to_list(d)
-        tups = '(%s)'%(','.join(['?']*len(line)))
-        self._db.execute("INSERT INTO '%s' VALUES %s"%(self.table, tups), line)
+        tups = f"({','.join(['?'] * len(line))})"
+        self._db.execute(f"INSERT INTO '{self.table}' VALUES {tups}", line)
         # self._db.commit()
 
     def get_record(self, msg_id):
         """Get a specific Task Record, by msg_id."""
-        cursor = self._db.execute("""SELECT * FROM '%s' WHERE msg_id==?"""%self.table, (msg_id,))
+        cursor = self._db.execute(
+            f"""SELECT * FROM '{self.table}' WHERE msg_id==?""", (msg_id,)
+        )
         line = cursor.fetchone()
         if line is None:
             raise KeyError("No such msg: %r"%msg_id)
@@ -359,12 +348,12 @@ class SQLiteDB(BaseDB):
 
     def update_record(self, msg_id, rec):
         """Update the data in an existing record."""
-        query = "UPDATE '%s' SET "%self.table
+        query = f"UPDATE '{self.table}' SET "
         sets = []
         keys = sorted(rec.keys())
         values = []
         for key in keys:
-            sets.append('%s = ?'%key)
+            sets.append(f'{key} = ?')
             values.append(rec[key])
         query += ', '.join(sets)
         query += ' WHERE msg_id == ?'
@@ -374,13 +363,13 @@ class SQLiteDB(BaseDB):
 
     def drop_record(self, msg_id):
         """Remove a record from the DB."""
-        self._db.execute("""DELETE FROM '%s' WHERE msg_id==?"""%self.table, (msg_id,))
+        self._db.execute(f"""DELETE FROM '{self.table}' WHERE msg_id==?""", (msg_id,))
         # self._db.commit()
 
     def drop_matching_records(self, check):
         """Remove a record from the DB."""
         expr,args = self._render_expression(check)
-        query = "DELETE FROM '%s' WHERE %s"%(self.table, expr)
+        query = f"DELETE FROM '{self.table}' WHERE {expr}"
         self._db.execute(query,args)
         # self._db.commit()
 
@@ -399,9 +388,8 @@ class SQLiteDB(BaseDB):
             included.
         """
         if keys:
-            bad_keys = [ key for key in keys if key not in self._keys ]
-            if bad_keys:
-                raise KeyError("Bad record key(s): %s"%bad_keys)
+            if bad_keys := [key for key in keys if key not in self._keys]:
+                raise KeyError(f"Bad record key(s): {bad_keys}")
 
         if keys:
             # ensure msg_id is present and first:
@@ -412,7 +400,7 @@ class SQLiteDB(BaseDB):
         else:
             req = '*'
         expr,args = self._render_expression(check)
-        query = """SELECT %s FROM '%s' WHERE %s"""%(req, self.table, expr)
+        query = f"""SELECT {req} FROM '{self.table}' WHERE {expr}"""
         cursor = self._db.execute(query, args)
         matches = cursor.fetchall()
         records = []
@@ -423,7 +411,7 @@ class SQLiteDB(BaseDB):
 
     def get_history(self):
         """get all msg_ids, ordered by time submitted."""
-        query = """SELECT msg_id FROM '%s' ORDER by submitted ASC"""%self.table
+        query = f"""SELECT msg_id FROM '{self.table}' ORDER by submitted ASC"""
         cursor = self._db.execute(query)
         # will be a list of length 1 tuples
         return [ tup[0] for tup in cursor.fetchall()]

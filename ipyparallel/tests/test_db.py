@@ -39,7 +39,7 @@ class TaskDBTest:
         #sleep 1/10 s, to ensure timestamp is different to previous calls
         time.sleep(0.1)
         msg_ids = []
-        for i in range(n):
+        for _ in range(n):
             msg = self.session.msg('apply_request', content=dict(a=5))
             msg['buffers'] = [os.urandom(buffer_size)]
             rec = init_record(msg)
@@ -105,7 +105,7 @@ class TaskDBTest:
         """test extracting subset of record keys"""
         found = self.db.find_records({'msg_id': {'$ne' : ''}},keys=['submitted', 'completed'])
         for rec in found:
-            self.assertEqual(set(rec.keys()), set(['msg_id', 'submitted', 'completed']))
+            self.assertEqual(set(rec.keys()), {'msg_id', 'submitted', 'completed'})
     
     def test_find_records_msg_id(self):
         """ensure msg_id is always in found records"""
@@ -225,8 +225,8 @@ class TestDictBackend(TaskDBTest, TestCase):
         self.assertEqual(len(self.db.get_history()), 20)
         self.load_records(1)
         self.assertEqual(len(self.db.get_history()), 17)
-        
-        for i in range(25):
+
+        for _ in range(25):
             self.load_records(1)
             self.assertTrue(len(self.db.get_history()) >= 17)
             self.assertTrue(len(self.db.get_history()) <= 20)

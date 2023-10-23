@@ -183,8 +183,8 @@ class IPControllerApp(BaseParallelApplication):
     @observe('cluster_id')
     def _cluster_id_changed(self, change):
         super(IPControllerApp, self)._cluster_id_changed(change)
-        self.engine_json_file = "%s-engine.json" % self.name
-        self.client_json_file = "%s-client.json" % self.name
+        self.engine_json_file = f"{self.name}-engine.json"
+        self.client_json_file = f"{self.name}-client.json"
 
 
     # internal
@@ -193,8 +193,8 @@ class IPControllerApp(BaseParallelApplication):
 
     @observe('use_threads')
     def _use_threads_changed(self, change):
-        self.mq_class = 'zmq.devices.{}MonitoredQueue'.format(
-            'Thread' if change['new'] else 'Process'
+        self.mq_class = (
+            f"zmq.devices.{'Thread' if change['new'] else 'Process'}MonitoredQueue"
         )
     
     write_connection_files = Bool(True,
@@ -285,20 +285,20 @@ class IPControllerApp(BaseParallelApplication):
             try:
                 self.load_config_from_json()
             except (AssertionError,IOError) as e:
-                self.log.error("Could not load config from JSON: %s" % e)
+                self.log.error(f"Could not load config from JSON: {e}")
             else:
                 # successfully loaded config from JSON, and reuse=True
                 # no need to wite back the same file
                 self.write_connection_files = False
-                
+
         self.log.debug("Config changed")
         self.log.debug(repr(self.config))
         
     def init_hub(self):
         c = self.config
-        
+
         self.do_import_statements()
-        
+
         try:
             self.factory = HubFactory(config=c, log=self.log)
             # self.start_logging()
@@ -308,7 +308,7 @@ class IPControllerApp(BaseParallelApplication):
         except Exception:
             self.log.error("Couldn't construct the Controller", exc_info=True)
             self.exit(1)
-        
+
         if self.write_connection_files:
             # save to new json config files
             f = self.factory
@@ -319,18 +319,18 @@ class IPControllerApp(BaseParallelApplication):
                 'unpack'    : f.session.unpacker,
                 'signature_scheme' : f.session.signature_scheme,
             }
-            
+
             cdict = {'ssh' : self.ssh_server}
             cdict.update(f.client_info)
             cdict.update(base)
             self.save_connection_dict(self.client_json_file, cdict)
-            
+
             edict = {'ssh' : self.engine_ssh_server}
             edict.update(f.engine_info)
             edict.update(base)
             self.save_connection_dict(self.engine_json_file, edict)
 
-        fname = "engines%s.json" % self.cluster_id
+        fname = f"engines{self.cluster_id}.json"
         self.factory.hub.engine_state_file = os.path.join(self.profile_dir.log_dir, fname)
         if self.restore_engines:
             self.factory.hub._load_engine_state()
@@ -341,7 +341,7 @@ class IPControllerApp(BaseParallelApplication):
     def init_schedulers(self):
         children = self.children
         mq = import_item(str(self.mq_class))
-        
+
         f = self.factory
         ident = f.session.bsession
         # disambiguate url, in case of *
@@ -359,7 +359,7 @@ class IPControllerApp(BaseParallelApplication):
 
         # Multiplexer Queue (in a Process)
         q = mq(zmq.ROUTER, zmq.ROUTER, zmq.PUB, b'in', b'out')
-        
+
         q.bind_in(f.client_url('mux'))
         q.setsockopt_in(zmq.IDENTITY, b'mux_in')
         q.bind_out(f.engine_url('mux'))
@@ -397,7 +397,7 @@ class IPControllerApp(BaseParallelApplication):
             self.log.warn("task::using no Task scheduler")
 
         else:
-            self.log.info("task::using Python %s Task scheduler"%scheme)
+            self.log.info(f"task::using Python {scheme} Task scheduler")
             sargs = (f.client_url('task'), f.engine_url('task'),
                     monitor_url, disambiguate_url(f.client_url('notification')),
                     disambiguate_url(f.client_url('registration')),
@@ -413,13 +413,13 @@ class IPControllerApp(BaseParallelApplication):
                 # single-threaded Controller
                 kwargs['in_thread'] = True
                 launch_scheduler(*sargs, **kwargs)
-        
+
         # set unlimited HWM for all relay devices
         if hasattr(zmq, 'SNDHWM'):
             q = children[0]
             q.setsockopt_in(zmq.RCVHWM, 0)
             q.setsockopt_out(zmq.SNDHWM, 0)
-            
+
             for q in children[1:]:
                 if not hasattr(q, 'setsockopt_in'):
                     continue
@@ -459,14 +459,14 @@ class IPControllerApp(BaseParallelApplication):
         statements = self.import_statements
         for s in statements:
             try:
-                self.log.msg("Executing statement: '%s'" % s)
+                self.log.msg(f"Executing statement: '{s}'")
                 exec(s, globals(), locals())
             except:
-                self.log.msg("Error running statement: %s" % s)
+                self.log.msg(f"Error running statement: {s}")
 
     def forward_logging(self):
         if self.log_url:
-            self.log.info("Forwarding logging to %s"%self.log_url)
+            self.log.info(f"Forwarding logging to {self.log_url}")
             context = zmq.Context.instance()
             lsock = context.socket(zmq.PUB)
             lsock.connect(self.log_url)

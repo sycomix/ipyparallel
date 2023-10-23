@@ -51,12 +51,11 @@ class TestLoadBalancedView(ClusterTestCase):
         def f(x,y):
             if y is None:
                 return y
-            if x is None:
-                return x
-            return x*y
+            return x if x is None else x*y
+
         data = list(range(10))
         data2 = list(range(4))
-        
+
         r = self.view.map_sync(f, data, data2)
         self.assertEqual(r, list(map(f, data, data2)))
 
@@ -64,30 +63,31 @@ class TestLoadBalancedView(ClusterTestCase):
         def f(x,y):
             if y is None:
                 return y
-            if x is None:
-                return x
-            return x*y
+            return x if x is None else x*y
+
         data = list(range(4))
         data2 = list(range(10))
-        
+
         r = self.view.map_sync(f, data, data2)
         self.assertEqual(r, list(map(f, data, data2)))
 
     def test_map_unordered(self):
         def f(x):
             return x**2
+
         def slow_f(x):
             import time
             time.sleep(0.05*x)
             return x**2
+
         data = list(range(16,0,-1))
         reference = list(map(f, data))
-        
+
         amr = self.view.map_async(slow_f, data, ordered=False)
         self.assertTrue(isinstance(amr, pmod.AsyncMapResult))
         # check individual elements, retrieved as they come
         # list comprehension uses __iter__
-        astheycame = [ r for r in amr ]
+        astheycame = list(amr)
         # Ensure that at least one result came out of order:
         self.assertNotEqual(astheycame, reference, "should not have preserved order")
         self.assertEqual(sorted(astheycame, reverse=True), reference, "result corrupted")
@@ -168,7 +168,7 @@ class TestLoadBalancedView(ClusterTestCase):
         ar1.get()
         e1 = ar1.engine_id
         e2 = e1
-        while e2 == e1:
+        while e2 == e2:
             ar2 = view.apply_async(lambda : 1)
             ar2.get()
             e2 = ar2.engine_id
@@ -180,12 +180,10 @@ class TestLoadBalancedView(ClusterTestCase):
     def test_follow(self):
         ar = self.view.apply_async(lambda : 1)
         ar.get()
-        ars = []
         first_id = ar.engine_id
 
         self.view.follow = ar
-        for i in range(5):
-            ars.append(self.view.apply_async(lambda : 1))
+        ars = [self.view.apply_async(lambda : 1) for _ in range(5)]
         self.view.wait(ars)
         for ar in ars:
             self.assertEqual(ar.engine_id, first_id)
@@ -198,4 +196,6 @@ class TestLoadBalancedView(ClusterTestCase):
 
         ar.wait()
         ar2.wait()
-        self.assertTrue(ar2.started >= ar.completed, "%s not >= %s"%(ar.started, ar.completed))
+        self.assertTrue(
+            ar2.started >= ar.completed, f"{ar.started} not >= {ar.completed}"
+        )

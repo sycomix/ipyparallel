@@ -16,8 +16,7 @@ def test_disambiguate_ip(warn_mock):
     wontresolve = 'this.wontresolve.dns'
     assert util.disambiguate_ip_address('0.0.0.0', wontresolve) == wontresolve
     assert warn_mock.called_once_with(
-        'IPython could not determine IPs for {}: '
-        '[Errno -2] Name or service not known'.format(wontresolve),
-        RuntimeWarning
+        f'IPython could not determine IPs for {wontresolve}: [Errno -2] Name or service not known',
+        RuntimeWarning,
     )
     assert util.disambiguate_ip_address('0.0.0.0', public_ip) == localhost()

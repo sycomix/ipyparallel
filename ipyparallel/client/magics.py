@@ -66,12 +66,12 @@ def _iscoroutinefunction(f):
     """
     if inspect.isgeneratorfunction(f):
         return True
-    if (
-        hasattr(inspect, 'iscoroutinefunction') and
-        inspect.iscoroutinefunction(f)
-    ):
-        return True
-    return False
+    return bool(
+        (
+            hasattr(inspect, 'iscoroutinefunction')
+            and inspect.iscoroutinefunction(f)
+        )
+    )
 
 
 
@@ -170,33 +170,32 @@ class ParallelMagics(Magics):
     def __init__(self, shell, view, suffix=''):
         self.view = view
         self.suffix = suffix
-        
+
         # register magics
         self.magics = dict(cell={},line={})
         line_magics = self.magics['line']
-        
-        px = 'px' + suffix
+
+        px = f'px{suffix}'
         if not suffix:
             # keep %result for legacy compatibility
             line_magics['result'] = self.result
-        
-        line_magics['pxresult' + suffix] = self.result
+
+        line_magics[f'pxresult{suffix}'] = self.result
         line_magics[px] = self.px
-        line_magics['pxconfig' + suffix] = self.pxconfig
-        line_magics['auto' + px] = self.autopx
-        
+        line_magics[f'pxconfig{suffix}'] = self.pxconfig
+        line_magics[f'auto{px}'] = self.autopx
+
         self.magics['cell'][px] = self.cell_px
-        
+
         super(ParallelMagics, self).__init__(shell=shell)
     
     def _eval_target_str(self, ts):
         if ':' in ts:
-            targets = eval("self.view.client.ids[%s]" % ts)
+            return eval(f"self.view.client.ids[{ts}]")
         elif 'all' in ts:
-            targets = 'all'
+            return 'all'
         else:
-            targets = eval(ts)
-        return targets
+            return eval(ts)
     
     @magic_arguments.magic_arguments()
     @exec_args
@@ -262,23 +261,24 @@ class ParallelMagics(Magics):
 
         # defaults:
         block = self.view.block if block is None else block
-        
-        base = "Parallel" if block else "Async parallel"
-        
-        targets = self.view.targets
-        if isinstance(targets, list) and len(targets) > 10:
-            str_targets = str(targets[:4])[:-1] + ', ..., ' + str(targets[-4:])[1:]
-        else:
-            str_targets = str(targets)
+
         if self.verbose:
-            print(base + " execution on engine(s): %s" % str_targets)
-        
+            base = "Parallel" if block else "Async parallel"
+
+            targets = self.view.targets
+            str_targets = (
+                f'{str(targets[:4])[:-1]}, ..., {str(targets[-4:])[1:]}'
+                if isinstance(targets, list) and len(targets) > 10
+                else str(targets)
+            )
+            print(f"{base} execution on engine(s): {str_targets}")
+
         result = self.view.execute(cell, silent=False, block=False)
         self.last_result = result
-        
+
         if save_name:
             self.shell.user_ns[save_name] = result
-        
+
         if block:
             result.get()
             result.display_outputs(groupby)

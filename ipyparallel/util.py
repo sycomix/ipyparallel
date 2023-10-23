@@ -132,25 +132,23 @@ def is_url(url):
     if '://' not in url:
         return False
     proto, addr = url.split('://', 1)
-    if proto.lower() not in ['tcp','pgm','epgm','ipc','inproc']:
-        return False
-    return True
+    return proto.lower() in ['tcp','pgm','epgm','ipc','inproc']
 
 def validate_url(url):
     """validate a url for zeromq"""
     if not isinstance(url, string_types):
         raise TypeError("url must be a string, not %r"%type(url))
     url = url.lower()
-    
+
     proto_addr = url.split('://')
     assert len(proto_addr) == 2, 'Invalid url: %r'%url
     proto, addr = proto_addr
     assert proto in ['tcp','pgm','epgm','ipc','inproc'], "Invalid protocol: %r"%proto
-    
+
     # domain pattern adapted from http://www.regexlib.com/REDetails.aspx?regexp_id=391
     # author: Remi Sabourin
     pat = re.compile(r'^([\w\d]([\w\d\-]{0,61}[\w\d])?\.)*[\w\d]([\w\d\-]{0,61}[\w\d])?$')
-    
+
     if proto == 'tcp':
         lis = addr.split(':')
         assert len(lis) == 2, 'Invalid url: %r'%url
@@ -159,13 +157,9 @@ def validate_url(url):
             port = int(s_port)
         except ValueError:
             raise AssertionError("Invalid port %r in url: %r"%(port, url))
-        
+
         assert addr == '*' or pat.match(addr) is not None, 'Invalid url: %r'%url
-        
-    else:
-        # only validate tcp urls currently
-        pass
-    
+
     return True
 
 
@@ -210,8 +204,9 @@ def ip_for_host(host):
     try:
         return socket.gethostbyname_ex(host)[2][0]
     except Exception as e:
-        warnings.warn("IPython could not determine IPs for %s: %s" % (host, e),
-            RuntimeWarning)
+        warnings.warn(
+            f"IPython could not determine IPs for {host}: {e}", RuntimeWarning
+        )
         return host
 
 
@@ -268,10 +263,10 @@ def disambiguate_url(url, location=None):
     except AssertionError:
         # probably not tcp url; could be ipc, etc.
         return url
-    
+
     ip = disambiguate_ip_address(ip,location)
-    
-    return "%s://%s:%s"%(proto,ip,port)
+
+    return f"{proto}://{ip}:{port}"
 
 
 #--------------------------------------------------------------------------
@@ -301,11 +296,11 @@ def _push(**ns):
     user_ns = globals()
     tmp = '_IP_PUSH_TMP_'
     while tmp in user_ns:
-        tmp = tmp + '_'
+        tmp += '_'
     try:
         for name, value in ns.items():
             user_ns[tmp] = value
-            exec("%s = %s" % (name, tmp), user_ns)
+            exec(f"{name} = {tmp}", user_ns)
     finally:
         user_ns.pop(tmp, None)
 
@@ -331,7 +326,7 @@ _random_ports = set()
 def select_random_ports(n):
     """Selects and return n random ports that are available."""
     ports = []
-    for i in range(n):
+    for _ in range(n):
         sock = socket.socket()
         sock.bind(('', 0))
         while sock.getsockname()[1] in _random_ports:
@@ -380,7 +375,7 @@ def integer_loglevel(loglevel):
 
 def connect_logger(logname, context, iface, root="ip", loglevel=logging.DEBUG):
     logger = logging.getLogger(logname)
-    if any([isinstance(h, handlers.PUBHandler) for h in logger.handlers]):
+    if any(isinstance(h, handlers.PUBHandler) for h in logger.handlers):
         # don't add a second PUBHandler
         return
     loglevel = integer_loglevel(loglevel)
@@ -395,9 +390,9 @@ def connect_logger(logname, context, iface, root="ip", loglevel=logging.DEBUG):
 
 def connect_engine_logger(context, iface, engine, loglevel=logging.DEBUG):
     from ipyparallel.engine.log import EnginePUBHandler
-    
+
     logger = logging.getLogger()
-    if any([isinstance(h, handlers.PUBHandler) for h in logger.handlers]):
+    if any(isinstance(h, handlers.PUBHandler) for h in logger.handlers):
         # don't add a second PUBHandler
         return
     loglevel = integer_loglevel(loglevel)
@@ -412,7 +407,7 @@ def connect_engine_logger(context, iface, engine, loglevel=logging.DEBUG):
 def local_logger(logname, loglevel=logging.DEBUG):
     loglevel = integer_loglevel(loglevel)
     logger = logging.getLogger(logname)
-    if any([isinstance(h, logging.StreamHandler) for h in logger.handlers]):
+    if any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         # don't add a second StreamHandler
         return
     handler = logging.StreamHandler()
@@ -482,10 +477,7 @@ def become_dask_worker(ip, port, nanny=False, **kwargs):
         kernel.log.info("Dask worker is already running.")
         return
     from distributed import Worker, Nanny
-    if nanny:
-        w = Nanny(ip, port, **kwargs)
-    else:
-        w = Worker(ip, port, **kwargs)
+    w = Nanny(ip, port, **kwargs) if nanny else Worker(ip, port, **kwargs)
     shell.user_ns['dask_worker'] = shell.user_ns['distributed_worker'] = kernel.distributed_worker = w
     kernel.io_loop.add_callback(w.start)
 
@@ -509,10 +501,7 @@ def ensure_timezone(dt):
     
     If it doesn't have one, attach the local timezone.
     """
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=tzlocal())
-    else:
-        return dt
+    return dt.replace(tzinfo=tzlocal()) if dt.tzinfo is None else dt
 
 
 # extract_dates forward-port from jupyter_client 5.0
@@ -527,9 +516,11 @@ def _ensure_tzinfo(dt):
     """
     if not dt.tzinfo:
         # No more naïve datetime objects!
-        warnings.warn(u"Interpreting naïve datetime as local %s. Please add timezone info to timestamps." % dt,
+        warnings.warn(
+            f"Interpreting naïve datetime as local {dt}. Please add timezone info to timestamps.",
             DeprecationWarning,
-            stacklevel=4)
+            stacklevel=4,
+        )
         dt = dt.replace(tzinfo=tzlocal())
     return dt
 
@@ -543,8 +534,7 @@ def _parse_date(s):
     """
     if s is None:
         return s
-    m = ISO8601_PAT.match(s)
-    if m:
+    if m := ISO8601_PAT.match(s):
         dt = dateutil_parse(s)
         return _ensure_tzinfo(dt)
     return s
@@ -552,9 +542,7 @@ def _parse_date(s):
 def extract_dates(obj):
     """extract ISO8601 dates from unpacked JSON"""
     if isinstance(obj, dict):
-        new_obj = {} # don't clobber
-        for k,v in iteritems(obj):
-            new_obj[k] = extract_dates(v)
+        new_obj = {k: extract_dates(v) for k, v in iteritems(obj)}
         obj = new_obj
     elif isinstance(obj, (list, tuple)):
         obj = [ extract_dates(o) for o in obj ]

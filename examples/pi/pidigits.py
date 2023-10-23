@@ -33,29 +33,25 @@ def fetch_pi_file(filename):
     if the file is not already present.
     """
     import os, urllib
-    ftpdir="ftp://pi.super-computing.org/.2/pi200m/"
     if os.path.exists(filename):
         # we already have it
         return
-    else:
         # download it
-        urlretrieve(ftpdir+filename,filename)
+    urlretrieve(f"ftp://pi.super-computing.org/.2/pi200m/{filename}", filename)
 
 def compute_one_digit_freqs(filename):
     """
     Read digits of pi from a file and compute the 1 digit frequencies.
     """
     d = txt_file_to_digits(filename)
-    freqs = one_digit_freqs(d)
-    return freqs
+    return one_digit_freqs(d)
 
 def compute_two_digit_freqs(filename):
     """
     Read digits of pi from a file and compute the 2 digit frequencies.
     """
     d = txt_file_to_digits(filename)
-    freqs = two_digit_freqs(d)
-    return freqs
+    return two_digit_freqs(d)
 
 def reduce_freqs(freqlist):
     """
@@ -71,8 +67,7 @@ def compute_n_digit_freqs(filename, n):
     Read digits of pi from a file and compute the n digit frequencies.
     """
     d = txt_file_to_digits(filename)
-    freqs = n_digit_freqs(d, n)
-    return freqs
+    return n_digit_freqs(d, n)
 
 # Read digits from a txt file
 
@@ -81,9 +76,9 @@ def txt_file_to_digits(filename, the_type=str):
     Yield the digits of pi read from a .txt file.
     """
     with open(filename, 'r') as f:
-        for line in f.readlines():
+        for line in f:
             for c in line:
-                if c != '\n' and c!= ' ':
+                if c not in ['\n', ' ']:
                     yield the_type(c)
 
 # Actual counting functions
@@ -128,7 +123,7 @@ def n_digit_freqs(digits, n, normalize=False):
     for d in digits:
         index = int(''.join(map(str, current)))
         freqs[index] += 1
-        current[0:-1] = current[1:]
+        current[:-1] = current[1:]
         current[-1] = d
     if normalize:
         freqs = freqs/freqs.sum()

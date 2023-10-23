@@ -19,8 +19,7 @@ def cluster(request):
 def ipython():
     config = default_config()
     config.TerminalInteractiveShell.simple_prompt = True
-    shell = TerminalInteractiveShell.instance(config=config)
-    return shell
+    return TerminalInteractiveShell.instance(config=config)
 
 @pytest.fixture()
 def ipython_interactive(request, ipython):

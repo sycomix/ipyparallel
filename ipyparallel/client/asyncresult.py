@@ -109,14 +109,14 @@ class AsyncResult(Future):
                         future.set_result(result)
                         future.output.set_result(None)
                 if not future:
-                    raise KeyError("No Future or result for msg_id: %s" % msg_id)
+                    raise KeyError(f"No Future or result for msg_id: {msg_id}")
                 self._children.append(future)
-                
+
         self._result_future = multi_future(self._children)
-        
+
         self._sent_future = multi_future([ f.tracker for f in self._children ])
         self._sent_future.add_done_callback(self._handle_sent)
-        
+
         self._output_future = multi_future([self._result_future] + [
             f.output for f in self._children
         ])
@@ -127,9 +127,9 @@ class AsyncResult(Future):
 
     def __repr__(self):
         if self._ready:
-            return "<%s: %s:finished>" % (self.__class__.__name__, self._fname)
+            return f"<{self.__class__.__name__}: {self._fname}:finished>"
         else:
-            return "<%s: %s>" % (self.__class__.__name__, self._fname)
+            return f"<{self.__class__.__name__}: {self._fname}>"
     
     def __dir__(self):
         keys = dir(self.__class__)
@@ -146,10 +146,7 @@ class AsyncResult(Future):
         Override me in subclasses for turning a list of results
         into the expected form.
         """
-        if self._single_result:
-            return res[0]
-        else:
-            return res
+        return res[0] if self._single_result else res
 
     def get(self, timeout=-1):
         """Return the result when it arrives.
@@ -162,13 +159,12 @@ class AsyncResult(Future):
         if not self.ready():
             self.wait(timeout)
 
-        if self._ready:
-            if self._success:
-                return self.result()
-            else:
-                raise self.exception()
-        else:
+        if not self._ready:
             raise error.TimeoutError("Result not ready.")
+        if self._success:
+            return self.result()
+        else:
+            raise self.exception()
 
     def _check_ready(self):
         if not self.ready():
@@ -281,10 +277,7 @@ class AsyncResult(Future):
     @property
     def metadata(self):
         """property for accessing execution metadata."""
-        if self._single_result:
-            return self._metadata[0]
-        else:
-            return self._metadata
+        return self._metadata[0] if self._single_result else self._metadata
 
     @property
     def result_dict(self):
@@ -357,10 +350,7 @@ class AsyncResult(Future):
             self.wait(0)
             self.wait_for_output(0)
             values = [ md[key] for md in self._metadata ]
-            if self._single_result:
-                return values[0]
-            else:
-                return values
+            return values[0] if self._single_result else values
         else:
             raise TypeError("Invalid key type %r, must be 'int','slice', or 'str'"%type(key))
 
@@ -397,8 +387,7 @@ class AsyncResult(Future):
                 yield result
         else:
             # already done
-            for r in rlist:
-                yield r
+            yield from rlist
     
     def __len__(self):
         return len(self.msg_ids)
@@ -472,10 +461,10 @@ class AsyncResult(Future):
         
         Computed as the sum of (completed-started) of each task
         """
-        t = 0
-        for md in self._metadata:
-            t += compare_datetimes(md['completed'], md['started']).total_seconds()
-        return t
+        return sum(
+            compare_datetimes(md['completed'], md['started']).total_seconds()
+            for md in self._metadata
+        )
     
     @property
     @check_ready
@@ -519,11 +508,11 @@ class AsyncResult(Future):
         if file is None:
             file = sys.stdout
         end = '' if text.endswith('\n') else '\n'
-        
+
         multiline = text.count('\n') > int(text.endswith('\n'))
         if prefix and multiline and not text.startswith('\n'):
             prefix = prefix + '\n'
-        print("%s%s" % (prefix, text), file=file, end=end)
+        print(f"{prefix}{text}", file=file, end=end)
         
     
     def _display_single_result(self):
@@ -572,35 +561,35 @@ class AsyncResult(Future):
         if self._single_result:
             self._display_single_result()
             return
-        
+
         stdouts = self.stdout
         stderrs = self.stderr
         execute_results  = self.execute_result
         output_lists = self.outputs
         results = self.get()
-        
+
         targets = self.engine_id
-        
+
         if groupby == "engine":
             for eid,stdout,stderr,outputs,r,execute_result in zip(
                     targets, stdouts, stderrs, output_lists, results, execute_results
                 ):
                 self._display_stream(stdout, '[stdout:%i] ' % eid)
                 self._display_stream(stderr, '[stderr:%i] ' % eid, file=sys.stderr)
-                
+
                 if get_ipython() is None:
                     # displaypub is meaningless outside IPython
                     continue
-                
+
                 if outputs or execute_result is not None:
                     _raw_text('[output:%i]' % eid)
-                
+
                 for output in outputs:
                     self._republish_displaypub(output, eid)
-                
+
                 if execute_result is not None:
                     display(r)
-        
+
         elif groupby in ('type', 'order'):
             # republish stdout:
             for eid,stdout in zip(targets, stdouts):
@@ -613,9 +602,9 @@ class AsyncResult(Future):
             if get_ipython() is None:
                 # displaypub is meaningless outside IPython
                 return
-            
+
             if groupby == 'order':
-                output_dict = dict((eid, outputs) for eid,outputs in zip(targets, output_lists))
+                output_dict = dict(zip(targets, output_lists))
                 N = max(len(outputs) for outputs in output_lists)
                 for i in range(N):
                     for eid in targets:
@@ -630,12 +619,12 @@ class AsyncResult(Future):
                         _raw_text('[output:%i]' % eid)
                     for output in outputs:
                         self._republish_displaypub(output, eid)
-        
+
             # finally, add execute_result:
             for eid,r,execute_result in zip(targets, results, execute_results):
                 if execute_result is not None:
                     display(r)
-        
+
         else:
             raise ValueError("groupby must be one of 'type', 'engine', 'collate', not %r" % groupby)
         
@@ -667,8 +656,7 @@ class AsyncMapResult(AsyncResult):
     # asynchronous iterator:
     def __iter__(self):
         it = self._ordered_iter if self.ordered else self._unordered_iter
-        for r in it():
-            yield r
+        yield from it()
     
     def _yield_child_results(self, child):
         """Yield results from a child
@@ -679,8 +667,7 @@ class AsyncMapResult(AsyncResult):
         if not isinstance(rlist, list):
             rlist = [rlist]
         error.collect_exceptions(rlist, self._fname)
-        for r in rlist:
-            yield r
+        yield from rlist
     
     # asynchronous ordered iterator:
     def _ordered_iter(self):
@@ -692,12 +679,10 @@ class AsyncMapResult(AsyncResult):
             evt = Event()
             for child in self._children:
                 self._wait_for_child(child, evt=evt)
-                for r in self._yield_child_results(child):
-                    yield r
+                yield from self._yield_child_results(child)
         else:
             # already done
-            for r in rlist:
-                yield r
+            yield from rlist
 
     # asynchronous unordered iterator:
     def _unordered_iter(self):
@@ -708,15 +693,13 @@ class AsyncMapResult(AsyncResult):
             queue = Queue()
             for child in self._children:
                 child.add_done_callback(queue.put)
-            for i in range(len(self)):
+            for _ in range(len(self)):
                 # use very-large timeout because no-timeout is not interruptible
                 child = queue.get(timeout=_FOREVER)
-                for r in self._yield_child_results(child):
-                    yield r
+                yield from self._yield_child_results(child)
         else:
             # already done
-            for r in rlist:
-                yield r
+            yield from rlist
 
 
 class AsyncHubResult(AsyncResult):
@@ -736,12 +719,10 @@ class AsyncHubResult(AsyncResult):
         if self._ready:
             return
         local_ids = [m for m in self.msg_ids if m in self._client.outstanding]
-        local_ready = self._client.wait(local_ids, timeout)
-        if local_ready:
-            remote_ids = [m for m in self.msg_ids if m not in self._client.results]
-            if not remote_ids:
-                self._ready = True
-            else:
+        if local_ready := self._client.wait(local_ids, timeout):
+            if remote_ids := [
+                m for m in self.msg_ids if m not in self._client.results
+            ]:
                 rdict = self._client.result_status(remote_ids, status_only=False)
                 pending = rdict['pending']
                 while pending and (timeout < 0 or time.time() < start+timeout):
@@ -751,6 +732,8 @@ class AsyncHubResult(AsyncResult):
                         time.sleep(0.1)
                 if not pending:
                     self._ready = True
+            else:
+                self._ready = True
         if self._ready:
             self._output_ready = True
             try:
@@ -759,7 +742,6 @@ class AsyncHubResult(AsyncResult):
                     r = results[0]
                     if isinstance(r, Exception):
                         raise r
-                        self.set_result(r)
                 else:
                     results = error.collect_exceptions(results, self._fname)
                 self._success = True

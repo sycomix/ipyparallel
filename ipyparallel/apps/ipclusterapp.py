@@ -111,9 +111,8 @@ def find_launcher_class(clsname, kind):
             # doesn't match necessary full class name, assume it's
             # just 'PBS' or 'MPI' etc prefix:
             clsname = clsname + kind + 'Launcher'
-        clsname = 'ipyparallel.apps.launcher.'+clsname
-    klass = import_item(clsname)
-    return klass
+        clsname = f'ipyparallel.apps.launcher.{clsname}'
+    return import_item(clsname)
 
 #-----------------------------------------------------------------------------
 # Main application
@@ -323,11 +322,13 @@ class IPClusterEngines(BaseParallelApplication):
             self.log.fatal("Could not import launcher class: %r"%clsname)
             self.exit(1)
 
-        launcher = klass(
-            work_dir=u'.', parent=self, log=self.log,
-            profile_dir=self.profile_dir.location, cluster_id=self.cluster_id,
+        return klass(
+            work_dir=u'.',
+            parent=self,
+            log=self.log,
+            profile_dir=self.profile_dir.location,
+            cluster_id=self.cluster_id,
         )
-        return launcher
 
     def engines_started_ok(self):
         if self.engine_launcher.running:
@@ -372,8 +373,7 @@ class IPClusterEngines(BaseParallelApplication):
     def stop_engines(self):
         if self.engine_launcher.running:
             self.log.info("Stopping Engines...")
-            d = self.engine_launcher.stop()
-            return d
+            return self.engine_launcher.stop()
         else:
             return None
 
@@ -419,9 +419,7 @@ class IPClusterEngines(BaseParallelApplication):
         except KeyboardInterrupt:
             pass
         except zmq.ZMQError as e:
-            if e.errno == errno.EINTR:
-                pass
-            else:
+            if e.errno != errno.EINTR:
                 raise
 
 start_aliases = {}
@@ -525,9 +523,9 @@ class IPClusterStart(IPClusterEngines):
         else:
             add_args = controller_args.extend
         if self.controller_ip:
-            add_args(['--ip=%s' % self.controller_ip])
+            add_args([f'--ip={self.controller_ip}'])
         if self.controller_location:
-            add_args(['--location=%s' % self.controller_location])
+            add_args([f'--location={self.controller_location}'])
         if self.extra_args:
             add_args(self.extra_args)
         self.engine_launcher = self.build_launcher(self.engine_launcher_class, 'EngineSet')
@@ -587,6 +585,7 @@ class IPClusterStart(IPClusterEngines):
         def start():
             self.start_controller()
             self.loop.add_timeout(self.loop.time() + self.delay, self.start_engines)
+
         self.loop.add_callback(start)
         # Now write the new pid file AFTER our new forked pid is active.
         self.write_pid_file()
@@ -595,9 +594,7 @@ class IPClusterStart(IPClusterEngines):
         except KeyboardInterrupt:
             pass
         except zmq.ZMQError as e:
-            if e.errno == errno.EINTR:
-                pass
-            else:
+            if e.errno != errno.EINTR:
                 raise
         finally:
             self.remove_pid_file()
@@ -639,7 +636,7 @@ class IPClusterNBExtension(BaseIPythonApplication):
             print("Disabling IPython clusters tab")
             install_extensions(enable=False, user=self.user)
         else:
-            self.exit("Must specify 'enable' or 'disable', not '%s'" % action)
+            self.exit(f"Must specify 'enable' or 'disable', not '{action}'")
 
 
 base = 'ipyparallel.apps.ipclusterapp.IPCluster'

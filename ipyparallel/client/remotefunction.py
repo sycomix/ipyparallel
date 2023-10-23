@@ -122,9 +122,7 @@ class RemoteFunction(object):
         # of decorated functions
         self.__name__ = getname(f)
         if getattr(f, '__doc__', None):
-            self.__doc__ = '{} wrapping:\n{}'.format(
-                self.__class__.__name__, f.__doc__,
-            )
+            self.__doc__ = f'{self.__class__.__name__} wrapping:\n{f.__doc__}'
         if getattr(f, '__signature__', None):
             self.__signature__ = f.__signature__
         else:
@@ -199,8 +197,8 @@ class ParallelFunction(RemoteFunction):
         client = self.view.client
         _mapping = kwargs.pop('__ipp_mapping', False)
         if kwargs:
-            raise TypeError("Unexpected keyword arguments: %s" % kwargs)
-        
+            raise TypeError(f"Unexpected keyword arguments: {kwargs}")
+
         lens = []
         maxlen = minlen = -1
         for i, seq in enumerate(sequences):
@@ -218,16 +216,16 @@ class ParallelFunction(RemoteFunction):
             if minlen == -1 or n < minlen:
                 minlen = n
             lens.append(n)
-        
+
         if maxlen == 0:
             # nothing to iterate over
             return []
-        
+
         # check that the length of sequences match
         if not _mapping and minlen != maxlen:
-            msg = 'all sequences must have equal length, but have %s' % lens
+            msg = f'all sequences must have equal length, but have {lens}'
             raise ValueError(msg)
-        
+
         balanced = 'Balanced' in self.view.__class__.__name__
         if balanced:
             if self.chunksize:
@@ -258,7 +256,7 @@ class ParallelFunction(RemoteFunction):
                 part = self.mapObject.getPartition(seq, index, nparts, maxlen)
                 args.append(part)
 
-            if sum([len(arg) for arg in args]) == 0:
+            if sum(len(arg) for arg in args) == 0:
                 continue
             args = [PrePickled(arg) for arg in args]
 
@@ -280,12 +278,11 @@ class ParallelFunction(RemoteFunction):
                             ordered=self.ordered
                         )
 
-        if self.block:
-            try:
-                return r.get()
-            except KeyboardInterrupt:
-                return r
-        else:
+        if not self.block:
+            return r
+        try:
+            return r.get()
+        except KeyboardInterrupt:
             return r
 
     def map(self, *sequences):

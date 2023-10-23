@@ -24,9 +24,7 @@ class MessageFuture(Future):
         self.add_done_callback(lambda f: self._evt.set())
 
     def wait(self, timeout=None):
-        if not self.done():
-            return self._evt.wait(timeout)
-        return True
+        return self._evt.wait(timeout) if not self.done() else True
 
 # The following are from tornado 5.0b1
 # avoids hang using gen.multi_future on asyncio,

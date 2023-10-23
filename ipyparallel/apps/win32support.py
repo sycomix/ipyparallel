@@ -63,7 +63,7 @@ def forward_read_events(fd, context=None):
     push = context.socket(zmq.PUSH)
     push.setsockopt(zmq.LINGER, -1)
     pull = context.socket(zmq.PULL)
-    addr='inproc://%s'%uuid.uuid4()
+    addr = f'inproc://{uuid.uuid4()}'
     push.bind(addr)
     pull.connect(addr)
     forwarder = ForwarderThread(push, fd)

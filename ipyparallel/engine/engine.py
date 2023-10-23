@@ -138,7 +138,7 @@ class EngineFactory(RegistrationFactory):
             if self.tunnel_mod.try_passwordless_ssh(self.sshserver, self.sshkey, self.paramiko):
                 password=False
             else:
-                password = getpass("SSH Password for %s: "%self.sshserver)
+                password = getpass(f"SSH Password for {self.sshserver}: ")
         else:
             password = False
 
@@ -163,12 +163,13 @@ class EngineFactory(RegistrationFactory):
                             password=password,
                 )
             return str(url)
+
         return connect, maybe_tunnel
 
     def register(self):
         """send the registration_request"""
 
-        self.log.info("Registering with controller at %s"%self.url)
+        self.log.info(f"Registering with controller at {self.url}")
         ctx = self.context
         connect,maybe_tunnel = self.init_connector()
         reg = ctx.socket(zmq.DEALER)
@@ -183,7 +184,7 @@ class EngineFactory(RegistrationFactory):
             content['id'] = self.id
         self.registrar.on_recv(lambda msg: self.complete_registration(msg, connect, maybe_tunnel))
         # print (self.session.key)
-        
+
         self.session.send(self.registrar, "registration_request", content=content)
 
     def _report_ping(self, msg):
@@ -201,11 +202,11 @@ class EngineFactory(RegistrationFactory):
         msg = self.session.deserialize(msg)
         content = msg['content']
         info = self.connection_info
-        
+
         def url(key):
             """get zmq url for given channel"""
             return str(info["interface"] + ":%i" % info[key])
-        
+
         if content['status'] == 'ok':
             if self.id is not None and content['id'] != self.id:
                 self.log.warning("Did not get the requested id: %i != %i", content['id'], self.id)
@@ -215,17 +216,17 @@ class EngineFactory(RegistrationFactory):
             # possibly forward hb ports with tunnels
             hb_ping = maybe_tunnel(url('hb_ping'))
             hb_pong = maybe_tunnel(url('hb_pong'))
-            
+
             hb_monitor = None
             if self.max_heartbeat_misses > 0:
                 # Add a monitor socket which will record the last time a ping was seen
                 mon = self.context.socket(zmq.SUB)
-                mport = mon.bind_to_random_port('tcp://%s' % localhost())
+                mport = mon.bind_to_random_port(f'tcp://{localhost()}')
                 mon.setsockopt(zmq.SUBSCRIBE, b"")
                 self._hb_listener = zmqstream.ZMQStream(mon, self.loop)
                 self._hb_listener.on_recv(self._report_ping)
-            
-            
+
+
                 hb_monitor = "tcp://%s:%i" % (localhost(), mport)
 
             heart = Heart(hb_ping, hb_pong, hb_monitor , heart_id=identity)
@@ -262,7 +263,7 @@ class EngineFactory(RegistrationFactory):
 
             # disable history:
             self.config.HistoryManager.hist_file = ':memory:'
-            
+
             # Redirect input streams and set a display hook.
             if self.out_stream_factory:
                 sys.stdout = self.out_stream_factory(self.session, iopub_socket, u'stdout')
@@ -276,10 +277,10 @@ class EngineFactory(RegistrationFactory):
             self.kernel = Kernel(parent=self, engine_id=self.id, ident=self.ident, session=self.session,
                     control_stream=control_stream, shell_streams=shell_streams, iopub_socket=iopub_socket,
                     loop=loop, user_ns=self.user_ns, log=self.log)
-            
+
             self.kernel.shell.display_pub.topic = cast_bytes('engine.%i.displaypub' % self.id)
-            
-                
+
+
             # periodically check the heartbeat pings of the controller
             # Should be started here and not in "start()" so that the right period can be taken 
             # from the hubs HeartBeatMonitor.period
@@ -292,18 +293,18 @@ class EngineFactory(RegistrationFactory):
             else:
                 self.log.info("Monitoring of the heartbeat signal from the hub is not enabled.")
 
-            
+
             # FIXME: This is a hack until IPKernelApp and IPEngineApp can be fully merged
             app = IPKernelApp(parent=self, shell=self.kernel.shell, kernel=self.kernel, log=self.log)
             if self.use_mpi and self.init_mpi:
                 app.exec_lines.insert(0, self.init_mpi)
             app.init_profile_dir()
             app.init_code()
-            
+
             self.kernel.start()
         else:
-            self.log.fatal("Registration Failed: %s"%msg)
-            raise Exception("Registration Failed: %s"%msg)
+            self.log.fatal(f"Registration Failed: {msg}")
+            raise Exception(f"Registration Failed: {msg}")
 
         self.log.info("Completed registration with id %i"%self.id)
 

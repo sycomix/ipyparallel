@@ -85,10 +85,10 @@ def _require(*modules, **mapping):
     user_ns = globals()
     for name in modules:
         try:
-            exec('import %s' % name, user_ns)
+            exec(f'import {name}', user_ns)
         except ImportError:
             raise UnmetDependency(name)
-            
+
     for name, cobj in mapping.items():
         user_ns[name] = uncan(cobj, user_ns)
     return True
@@ -195,29 +195,19 @@ class Dependency(set):
         """check whether our dependencies have been met."""
         if len(self) == 0:
             return True
-        against = set()
-        if self.success:
-            against = completed
+        against = completed if self.success else set()
         if failed is not None and self.failure:
             against = against.union(failed)
-        if self.all:
-            return self.issubset(against)
-        else:
-            return not self.isdisjoint(against)
+        return self.issubset(against) if self.all else not self.isdisjoint(against)
     
     def unreachable(self, completed, failed=None):
         """return whether this dependency has become impossible."""
         if len(self) == 0:
             return False
-        against = set()
-        if not self.success:
-            against = completed
+        against = completed if not self.success else set()
         if failed is not None and not self.failure:
             against = against.union(failed)
-        if self.all:
-            return not self.isdisjoint(against)
-        else:
-            return self.issubset(against)
+        return not self.isdisjoint(against) if self.all else self.issubset(against)
         
     
     def as_dict(self):

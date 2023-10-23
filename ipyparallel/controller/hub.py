@@ -264,33 +264,33 @@ class HubFactory(RegistrationFactory):
         else:
             from .scheduler import TaskScheduler
             scheme = TaskScheduler.scheme_name.default_value
-        
+
         # build connection dicts
         engine = self.engine_info = {
-            'interface'     : "%s://%s" % (self.engine_transport, self.engine_ip),
-            'registration'  : self.regport,
-            'control'       : self.control[1],
-            'mux'           : self.mux[1],
-            'hb_ping'       : self.hb[0],
-            'hb_pong'       : self.hb[1],
-            'task'          : self.task[1],
-            'iopub'         : self.iopub[1],
-            }
+            'interface': f"{self.engine_transport}://{self.engine_ip}",
+            'registration': self.regport,
+            'control': self.control[1],
+            'mux': self.mux[1],
+            'hb_ping': self.hb[0],
+            'hb_pong': self.hb[1],
+            'task': self.task[1],
+            'iopub': self.iopub[1],
+        }
 
         client = self.client_info = {
-            'interface'     : "%s://%s" % (self.client_transport, self.client_ip),
-            'registration'  : self.regport,
-            'control'       : self.control[0],
-            'mux'           : self.mux[0],
-            'task'          : self.task[0],
-            'task_scheme'   : scheme,
-            'iopub'         : self.iopub[0],
-            'notification'  : self.notifier_port,
-            }
-        
+            'interface': f"{self.client_transport}://{self.client_ip}",
+            'registration': self.regport,
+            'control': self.control[0],
+            'mux': self.mux[0],
+            'task': self.task[0],
+            'task_scheme': scheme,
+            'iopub': self.iopub[0],
+            'notification': self.notifier_port,
+        }
+
         self.log.debug("Hub engine addrs: %s", self.engine_info)
         self.log.debug("Hub client addrs: %s", self.client_info)
-        
+
         # Registrar socket
         q = ZMQStream(ctx.socket(zmq.ROUTER), loop)
         util.set_hwm(q, 0)
@@ -314,7 +314,7 @@ class HubFactory(RegistrationFactory):
                             )
 
         ### Client connections ###
-        
+
         # Notifier socket
         n = ZMQStream(ctx.socket(zmq.PUB), loop)
         n.bind(self.client_url('notification'))
@@ -496,8 +496,7 @@ class Hub(SessionFactory):
                 t = self.by_ident.get(cast_bytes(t), t)
             _targets.append(t)
         targets = _targets
-        bad_targets = [ t for t in targets if t not in self.ids ]
-        if bad_targets:
+        if bad_targets := [t for t in targets if t not in self.ids]:
             raise IndexError("No Such Engine: %r" % bad_targets)
         if not targets:
             raise IndexError("No Engines Registered")
@@ -561,10 +560,9 @@ class Hub(SessionFactory):
             self.session.send(self.query, "hub_error", ident=client_id,
                     content=content, parent=msg)
             return
-        
+
         try:
-            f = handler(idents, msg)
-            if f:
+            if f := handler(idents, msg):
                 yield maybe_future(f)
         except Exception:
             content = error.wrap_exception()
@@ -595,10 +593,10 @@ class Hub(SessionFactory):
         triggers unregistration"""
         self.log.debug("heartbeat::handle_heart_failure(%r)", heart)
         eid = self.hearts.get(heart, None)
-        uuid = self.engines[eid].uuid
         if eid is None:
             self.log.info("heartbeat::ignoring heart failure %r (not an engine or already dead)", heart)
         else:
+            uuid = self.engines[eid].uuid
             self.unregister_engine(heart, dict(content=dict(id=eid, queue=uuid)))
 
     #----------------------- MUX Queue Traffic ------------------------------
@@ -868,13 +866,13 @@ class Hub(SessionFactory):
         msg_id = parent['msg_id']
         msg_type = msg['header']['msg_type']
         content = msg['content']
-        
+
         # ensure msg_id is in db
         try:
             rec = self.db.get_record(msg_id)
         except KeyError:
             rec = None
-        
+
         # stream
         d = {}
         if msg_type == 'stream':
@@ -888,13 +886,13 @@ class Hub(SessionFactory):
         elif msg_type in ('display_data', 'execute_result'):
             d[msg_type] = content
         elif msg_type == 'data_pub':
-            self.log.info("ignored data_pub message for %s" % msg_id)
+            self.log.info(f"ignored data_pub message for {msg_id}")
         else:
             self.log.warn("unhandled iopub msg_type: %r", msg_type)
 
         if not d:
             return
-        
+
         if rec is None:
             # new record
             rec = empty_record()
@@ -904,7 +902,7 @@ class Hub(SessionFactory):
             update_record = self.db.add_record
         else:
             update_record = self.db.update_record
-        
+
         try:
             update_record(msg_id, d)
         except Exception:
@@ -920,9 +918,7 @@ class Hub(SessionFactory):
         """Reply with connection addresses for clients."""
         self.log.info("client::client %r connected", client_id)
         content = dict(status='ok')
-        jsonable = {}
-        for k,v in iteritems(self.keytable):
-                jsonable[str(k)] = v
+        jsonable = {str(k): v for k, v in iteritems(self.keytable)}
         content['engines'] = jsonable
         self.session.send(self.query, 'connection_reply', content, parent=msg, ident=client_id)
 
@@ -1037,9 +1033,7 @@ class Hub(SessionFactory):
             except:
                 content = error.wrap_exception()
             # build a fake header:
-            header = {}
-            header['engine'] = uuid
-            header['date'] = util.utcnow()
+            header = {'engine': uuid, 'date': util.utcnow()}
             rec = dict(result_content=content, result_header=header, result_buffers=[])
             rec['completed'] = util.ensure_timezone(header['date'])
             rec['engine_uuid'] = uuid
@@ -1065,23 +1059,21 @@ class Hub(SessionFactory):
         self.keytable[eid] = ec.uuid
         self.engines[eid] = ec
         self.by_ident[cast_bytes(ec.uuid)] = ec.id
-        self.queues[eid] = list()
-        self.tasks[eid] = list()
-        self.completed[eid] = list()
+        self.queues[eid] = []
+        self.tasks[eid] = []
+        self.completed[eid] = []
         self.hearts[heart] = eid
         content = dict(id=eid, uuid=self.engines[eid].uuid)
         if self.notifier:
             self.session.send(self.notifier, "registration_notification", content=content)
         self.log.info("engine::Engine Connected: %i", eid)
-        
+
         self._save_engine_state()
 
     def _purge_stalled_registration(self, heart):
         if heart in self.incoming_registrations:
             ec = self.incoming_registrations.pop(heart)
             self.log.info("registration::purging stalled registration: %i", ec.id)
-        else:
-            pass
 
     #-------------------------------------------------------------------------
     # Engine State
@@ -1103,16 +1095,9 @@ class Hub(SessionFactory):
         """save engine mapping to JSON file"""
         if not self.engine_state_file:
             return
-        self.log.debug("save engine state to %s" % self.engine_state_file)
-        state = {}
-        engines = {}
-        for eid, ec in self.engines.items():
-            engines[eid] = ec.uuid
-        
-        state['engines'] = engines
-        
-        state['next_id'] = self._idcounter
-        
+        self.log.debug(f"save engine state to {self.engine_state_file}")
+        engines = {eid: ec.uuid for eid, ec in self.engines.items()}
+        state = {'engines': engines, 'next_id': self._idcounter}
         with open(self.engine_state_file, 'w') as f:
             json.dump(state, f)
 
@@ -1121,12 +1106,12 @@ class Hub(SessionFactory):
         """load engine mapping from JSON file"""
         if not os.path.exists(self.engine_state_file):
             return
-        
-        self.log.info("loading engine state from %s" % self.engine_state_file)
-        
+
+        self.log.info(f"loading engine state from {self.engine_state_file}")
+
         with open(self.engine_state_file) as f:
             state = json.load(f)
-        
+
         save_notifier = self.notifier
         self.notifier = None
         for eid, uuid in iteritems(state['engines']):
@@ -1134,12 +1119,12 @@ class Hub(SessionFactory):
             # start with this heart as current and beating:
             self.heartmonitor.responses.add(heart)
             self.heartmonitor.hearts.add(heart)
-            
+
             self.incoming_registrations[heart] = EngineConnector(id=int(eid), uuid=uuid)
             self.finish_registration(heart)
-        
+
         self.notifier = save_notifier
-        
+
         self._idcounter = state['next_id']
 
     #-------------------------------------------------------------------------
@@ -1226,8 +1211,7 @@ class Hub(SessionFactory):
                 reply = error.wrap_exception()
                 self.log.exception("Error dropping records")
         else:
-            pending = [m for m in msg_ids if (m in self.pending)]
-            if pending:
+            if pending := [m for m in msg_ids if (m in self.pending)]:
                 try:
                     raise IndexError("msg pending: %r" % pending[0])
                 except:
@@ -1342,9 +1326,16 @@ class Hub(SessionFactory):
 
     def _extract_record(self, rec):
         """decompose a TaskRecord dict into subsection of reply for get_result"""
-        io_dict = {}
-        for key in ('execute_input', 'execute_result', 'error', 'stdout', 'stderr'):
-                io_dict[key] = rec[key]
+        io_dict = {
+            key: rec[key]
+            for key in (
+                'execute_input',
+                'execute_result',
+                'error',
+                'stdout',
+                'stderr',
+            )
+        }
         content = { 
             'header': rec['header'],
             'metadata': rec['metadata'],
@@ -1388,7 +1379,22 @@ class Hub(SessionFactory):
         else:
             records = {}
         for msg_id in msg_ids:
-            if msg_id in self.pending:
+            if (
+                msg_id not in self.pending
+                and msg_id not in self.all_completed
+                and msg_id in records
+                and rec['completed']
+            ):
+                completed.append(msg_id)
+                c,bufs = self._extract_record(records[msg_id])
+                content[msg_id] = c
+                buffers.extend(bufs)
+            elif (
+                msg_id not in self.pending
+                and msg_id not in self.all_completed
+                and msg_id in records
+                or msg_id in self.pending
+            ):
                 pending.append(msg_id)
             elif msg_id in self.all_completed:
                 completed.append(msg_id)
@@ -1396,17 +1402,9 @@ class Hub(SessionFactory):
                     c,bufs = self._extract_record(records[msg_id])
                     content[msg_id] = c
                     buffers.extend(bufs)
-            elif msg_id in records:
-                if rec['completed']:
-                    completed.append(msg_id)
-                    c,bufs = self._extract_record(records[msg_id])
-                    content[msg_id] = c
-                    buffers.extend(bufs)
-                else:
-                    pending.append(msg_id)
             else:
                 try:
-                    raise KeyError('No such message: '+msg_id)
+                    raise KeyError(f'No such message: {msg_id}')
                 except:
                     content = error.wrap_exception()
                 break
@@ -1433,7 +1431,7 @@ class Hub(SessionFactory):
         query = extract_dates(content.get('query', {}))
         keys = content.get('keys', None)
         buffers = []
-        empty = list()
+        empty = []
         try:
             records = self.db.find_records(query, keys)
         except Exception as e:

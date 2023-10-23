@@ -90,10 +90,7 @@ def weighted(loads):
         idx += 1
     while sums[idy] < y:
         idy += 1
-    if weights[idy] > weights[idx]:
-        return idy
-    else:
-        return idx
+    return idy if weights[idy] > weights[idx] else idx
 
 def leastload(loads):
     """Always choose the lowest load.
@@ -218,7 +215,7 @@ help="""select the task scheduler scheme  [default: Python LRU]
     def start(self):
         self.query_stream.on_recv(self.dispatch_query_reply)
         self.session.send(self.query_stream, "connection_request", {})
-        
+
         self.engine_stream.on_recv(self.dispatch_result, copy=False)
         self.client_stream.on_recv(self.dispatch_submission, copy=False)
 
@@ -227,7 +224,7 @@ help="""select the task scheduler scheme  [default: Python LRU]
             unregistration_notification = self._unregister_engine
         )
         self.notifier_stream.on_recv(self.dispatch_notification)
-        self.log.info("Scheduler started [%s]" % self.scheme_name)
+        self.log.info(f"Scheduler started [{self.scheme_name}]")
 
     def resume_receiving(self):
         """Resume accepting jobs."""
@@ -302,10 +299,6 @@ help="""select the task scheduler scheme  [default: Python LRU]
 
     def _unregister_engine(self, uid):
         """Existing engine with ident `uid` became unavailable."""
-        if len(self.targets) == 1:
-            # this was our only engine
-            pass
-
         # handle any potentially finished tasks:
         self.engine_stream.flush()
 
@@ -505,11 +498,7 @@ help="""select the task scheduler scheme  [default: Python LRU]
         """return a list of available engine indices based on HWM"""
         if not self.hwm:
             return list(range(len(self.targets)))
-        available = []
-        for idx in range(len(self.targets)):
-            if self.loads[idx] < self.hwm:
-                available.append(idx)
-        return available
+        return [idx for idx in range(len(self.targets)) if self.loads[idx] < self.hwm]
 
     def maybe_run(self, job):
         """check location dependencies, and run if they are met."""
@@ -590,10 +579,7 @@ help="""select the task scheduler scheme  [default: Python LRU]
 
     def submit_task(self, job, indices=None):
         """Submit a task to any of a subset of our targets."""
-        if indices:
-            loads = [self.loads[i] for i in indices]
-        else:
-            loads = self.loads
+        loads = [self.loads[i] for i in indices] if indices else self.loads
         idx = self.scheme(loads)
         if indices:
             idx = indices[idx]
@@ -720,25 +706,29 @@ help="""select the task scheduler scheme  [default: Python LRU]
         # recheck *all* jobs if
         # a) we have HWM and an engine just become no longer full
         # or b) dep_id was given as None
-        
-        if dep_id is None or self.hwm and any( [ load==self.hwm-1 for load in self.loads ]):
+
+        if (
+            dep_id is None
+            or self.hwm
+            and any(load == self.hwm - 1 for load in self.loads)
+        ):
             jobs = self.queue
             using_queue = True
         else:
             using_queue = False
             jobs = deque(sorted( self.queue_map[msg_id] for msg_id in msg_ids ))
-        
+
         to_restore = []
         while jobs:
             job = jobs.popleft()
             if job.removed:
                 continue
             msg_id = job.msg_id
-            
+
             put_it_back = True
-            
+
             if job.after.unreachable(self.all_completed, self.all_failed)\
-                    or job.follow.unreachable(self.all_completed, self.all_failed):
+                        or job.follow.unreachable(self.all_completed, self.all_failed):
                 self.fail_unreachable(msg_id)
                 put_it_back = False
 
@@ -827,11 +817,10 @@ def launch_scheduler(in_addr, out_addr, mon_addr, not_addr, reg_addr, config=Non
     # setup logging.
     if in_thread:
         log = Application.instance().log
+    elif log_url:
+        log = connect_logger(logname, ctx, log_url, root="scheduler", loglevel=loglevel)
     else:
-        if log_url:
-            log = connect_logger(logname, ctx, log_url, root="scheduler", loglevel=loglevel)
-        else:
-            log = local_logger(logname, loglevel)
+        log = local_logger(logname, loglevel)
 
     scheduler = TaskScheduler(client_stream=ins, engine_stream=outs,
                             mon_stream=mons, notifier_stream=nots,

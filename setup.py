@@ -17,7 +17,7 @@ import sys
 
 v = sys.version_info
 if v[:2] < (2, 7) or (v[0] >= 3 and v[:2] < (3, 4)):
-    error = "ERROR: %s requires Python version 2.7 or 3.4 or above." % name
+    error = f"ERROR: {name} requires Python version 2.7 or 3.4 or above."
     print(error, file=sys.stderr)
     sys.exit(1)
 
@@ -70,11 +70,11 @@ pjoin = os.path.join
 here = os.path.abspath(os.path.dirname(__file__))
 pkg_root = pjoin(here, name)
 
-packages = []
-for d, _, _ in os.walk(pjoin(here, name)):
-    if os.path.exists(pjoin(d, '__init__.py')):
-        packages.append(d[len(here)+1:].replace(os.path.sep, '.'))
-
+packages = [
+    d[len(here) + 1 :].replace(os.path.sep, '.')
+    for d, _, _ in os.walk(pjoin(here, name))
+    if os.path.exists(pjoin(d, '__init__.py'))
+]
 package_data = {'ipyparallel.nbextension': [pjoin('static', '*')]}
 
 data_files = [

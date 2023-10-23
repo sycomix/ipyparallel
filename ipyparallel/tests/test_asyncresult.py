@@ -214,9 +214,12 @@ class AsyncResultTest(ClusterTestCase):
         try:
             time.sleep(0.25)
             hr = rc2.get_result(ar.msg_ids)
-            self.assertTrue(hr.elapsed > 0., "got bad elapsed: %s" % hr.elapsed)
+            self.assertTrue(hr.elapsed > 0., f"got bad elapsed: {hr.elapsed}")
             hr.get(1)
-            self.assertTrue(hr.wall_time < ar.wall_time + 0.2, "got bad wall_time: %s > %s" % (hr.wall_time, ar.wall_time))
+            self.assertTrue(
+                hr.wall_time < ar.wall_time + 0.2,
+                f"got bad wall_time: {hr.wall_time} > {ar.wall_time}",
+            )
             self.assertEqual(hr.serial_time, ar.serial_time)
         finally:
             rc2.close()
@@ -285,7 +288,7 @@ class AsyncResultTest(ClusterTestCase):
     def test_await_data(self):
         """asking for ar.data flushes outputs"""
         self.minimum_engines(1)
-        
+
         v = self.client[-1]
         ar = v.execute('\n'.join([
             "import time",
@@ -304,10 +307,12 @@ class AsyncResultTest(ClusterTestCase):
                 if i == 4:
                     break
             time.sleep(0.05)
-        
+
         ar.get(5)
         assert 4 in found
-        assert len(found) > 1, "should have seen data multiple times, but got: %s" % found
+        assert (
+            len(found) > 1
+        ), f"should have seen data multiple times, but got: {found}"
 
     def test_not_single_result(self):
         save_build = self.client._build_targets

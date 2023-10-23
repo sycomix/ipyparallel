@@ -145,7 +145,7 @@ class HeartMonitor(LoggingConfigurable):
         new_probation = {}
         for cur_heart in (b for b in missed_beats if b in hearts):
             miss_count = on_probation.get(cur_heart, 0) + 1
-            self.log.info("heartbeat::missed %s : %s" % (cur_heart, miss_count))
+            self.log.info(f"heartbeat::missed {cur_heart} : {miss_count}")
             if miss_count > self.max_heartmonitor_misses:
                 failures.append(cur_heart)
             else:
@@ -167,13 +167,12 @@ class HeartMonitor(LoggingConfigurable):
                     handler(heart)
                 except Exception as e:
                     self.log.error("heartbeat::Bad Handler! %s", handler, exc_info=True)
-                    pass
         else:
             self.log.info("heartbeat::Heart %s failed :(", heart)
         try:
             self.hearts.remove(heart)
         except KeyError:
-            self.log.info("heartbeat:: %s has already been removed." % heart)
+            self.log.info(f"heartbeat:: {heart} has already been removed.")
 
 
     @log_errors

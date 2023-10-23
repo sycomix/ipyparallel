@@ -31,7 +31,7 @@ def main(connection_file):
 
     reg_url = cfg['interface']
     iopub_port = cfg['iopub']
-    iopub_url = "%s:%s"%(reg_url, iopub_port)
+    iopub_url = f"{reg_url}:{iopub_port}"
 
     session = Session(key=cfg['key'].encode('ascii'))
     sub = ctx.socket(zmq.SUB)
@@ -58,28 +58,17 @@ def main(connection_file):
             # stdout/stderr
             # stream names are in msg['content']['name'], if you want to handle
             # them differently
-            print("%s: %s" % (topic, msg['content']['text']))
+            print(f"{topic}: {msg['content']['text']}")
         elif msg['msg_type'] == 'error':
             # Python traceback
             c = msg['content']
-            print(topic + ':')
+            print(f'{topic}:')
             for line in c['traceback']:
                 # indent lines
-                print('    ' + line)
-        elif msg['msg_type'] == 'error':
-            # Python traceback
-            c = msg['content']
-            print(topic + ':')
-            for line in c['traceback']:
-                # indent lines
-                print('    ' + line)
+                print(f'    {line}')
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        pattern = sys.argv[1]
-    else:
-        # This gets the security file for the default profile:
-        pattern = 'ipcontroller-client.json'
+    pattern = sys.argv[1] if len(sys.argv) > 1 else 'ipcontroller-client.json'
     cf = find_connection_file(pattern)
-    print("Using connection file %s" % cf)
+    print(f"Using connection file {cf}")
     main(cf)
